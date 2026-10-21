@@ -30,34 +30,58 @@ export type EmrRecord = {
 
 export class EmrUnavailable extends Error {}
 
+export type EmrCredentials = { baseUrl: string; clientId: string; clientSecret: string };
+
 export class EmrClient {
-  private token: { value: string; expiresAt: number } | null = null;
+  private token: { value: string; expiresAt: number; forCredentials: string } | null = null;
 
-  constructor(private baseUrl: string, private clientId: string, private clientSecret: string) {}
+  /** Credentials are read on every call, so changes saved in the admin's secrets list apply at once. */
+  constructor(private credentials: () => Promise<EmrCredentials>) {}
 
-  private async getToken(): Promise<string> {
-    if (this.token && this.token.expiresAt > Date.now() + 30_000) return this.token.value;
-    const res = await this.fetch("/oauth/token", {
+  private async getToken(c: EmrCredentials): Promise<string> {
+    const key = `${c.baseUrl}\n${c.clientId}\n${c.clientSecret}`;
+    if (this.token && this.token.forCredentials === key && this.token.expiresAt > Date.now() + 30_000) return this.token.value;
+    const res = await this.send(c, "/oauth/token", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "client_credentials", client_id: this.clientId, client_secret: this.clientSecret }).toString()
-    }, false);
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: c.clientId, client_secret: c.clientSecret }).toString()
+    });
     if (!res.ok) throw new EmrUnavailable(`EMR token request failed: ${res.status}`);
     const body = await res.json() as { access_token: string; expires_in: number };
-    this.token = { value: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
+    this.token = { value: body.access_token, expiresAt: Date.now() + body.expires_in * 1000, forCredentials: key };
     return body.access_token;
   }
 
-  private async fetch(path: string, init: RequestInit = {}, auth = true): Promise<Response> {
-    const headers = new Headers(init.headers);
-    if (auth) headers.set("authorization", `Bearer ${await this.getToken()}`);
-    let res: Response;
+  /** Signs in to the EMR with the current credentials. Used by the admin's "Test connection" button. */
+  async testConnection(): Promise<{ ok: true } | { ok: false; message: string }> {
     try {
-      res = await fetch(new URL(path, this.baseUrl), { ...init, headers, signal: AbortSignal.timeout(15_000) });
+      this.token = null;
+      await this.getToken(await this.credentials());
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: (e as Error).message };
+    }
+  }
+
+  private async send(c: EmrCredentials, path: string, init: RequestInit): Promise<Response> {
+    try {
+      return await fetch(new URL(path, c.baseUrl), { ...init, signal: AbortSignal.timeout(15_000) });
     } catch (e) {
       throw new EmrUnavailable(`EMR not reachable: ${(e as Error).message}`);
     }
-    if (res.status === 401 && auth) { this.token = null; }
+  }
+
+  private async fetch(path: string, init: RequestInit = {}): Promise<Response> {
+    const c = await this.credentials();
+    const headers = new Headers(init.headers);
+    headers.set("authorization", `Bearer ${await this.getToken(c)}`);
+    let res: Response;
+    try {
+      res = await fetch(new URL(path, c.baseUrl), { ...init, headers, signal: AbortSignal.timeout(15_000) });
+    } catch (e) {
+      throw new EmrUnavailable(`EMR not reachable: ${(e as Error).message}`);
+    }
+    if (res.status === 401) this.token = null;
     if (res.status >= 500) throw new EmrUnavailable(`EMR responded ${res.status}`);
     return res;
   }

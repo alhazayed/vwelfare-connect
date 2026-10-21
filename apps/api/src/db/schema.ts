@@ -119,9 +119,22 @@ export const authSessions = pgTable("auth_sessions", {
   kind: text("kind", { enum: ["staff", "patient"] }).notNull(),
   subjectId: text("subject_id").notNull(),
   mfaOk: boolean("mfa_ok").notNull().default(false),
+  // Super admin only: until when the secrets list is unlocked in this session.
+  vaultUntil: ts("vault_until"),
   createdAt: ts("created_at").notNull().defaultNow(),
   lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
   expiresAt: ts("expires_at").notNull()
+});
+
+// Credentials and addresses of the services the app connects to (EMR, SMS, email, virus scanning).
+// Values are encrypted; when a name has no row here, the value comes from the .env file.
+export const secrets = pgTable("secrets", {
+  name: text("name").primaryKey(),
+  valueEnc: text("value_enc").notNull(),
+  description: text("description"),
+  isSecret: boolean("is_secret").notNull().default(true),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => staff.id)
 });
 
 export const settings = pgTable("settings", {

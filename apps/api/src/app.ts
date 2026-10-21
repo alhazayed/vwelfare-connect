@@ -11,6 +11,7 @@ import { MAX_FILE_BYTES } from "./lib/files.ts";
 import { patientKey, staffKey } from "./realtime.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { adminRoutes } from "./routes/admin.ts";
+import { secretsRoutes } from "./routes/secrets.ts";
 import { providerRoutes } from "./routes/provider.ts";
 import { patientRoutes } from "./routes/patient.ts";
 
@@ -53,6 +54,7 @@ export async function buildApp(deps: Deps, opts: { logger?: boolean } = {}) {
 
   authRoutes(app, deps);
   adminRoutes(app, deps);
+  secretsRoutes(app, deps);
   providerRoutes(app, deps);
   patientRoutes(app, deps);
   return app;

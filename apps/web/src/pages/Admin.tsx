@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import { useI18n } from "../i18n.tsx";
 import { Dialog, useAsync, useToast } from "../components/ui.tsx";
+import { SecretsPanel } from "./Secrets.tsx";
 
 type ProviderRow = {
   id: string; email: string; nameEn: string; nameAr: string | null; specialtyEn: string | null; specialtyAr: string | null;
@@ -30,10 +31,36 @@ const ACTIONS: Record<string, { en: string; ar: string }> = {
   consent_granted: { en: "Allowed access to chats with other providers", ar: "السماح بقراءة المحادثات مع مقدمي رعاية آخرين" },
   consent_declined: { en: "Declined an access request", ar: "رفض طلب وصول" },
   consent_withdrawn: { en: "Withdrew access", ar: "سحب الإذن" },
-  record_viewed: { en: "Opened a past chat record", ar: "فتح سجل محادثة سابقة" }
+  record_viewed: { en: "Opened a past chat record", ar: "فتح سجل محادثة سابقة" },
+  vault_password_set: { en: "Set the secrets password", ar: "تعيين كلمة مرور الأسرار" },
+  vault_password_changed: { en: "Changed the secrets password", ar: "تغيير كلمة مرور الأسرار" },
+  vault_password_reset: { en: "Secrets password reset on the server", ar: "إعادة تعيين كلمة مرور الأسرار على الخادم" },
+  vault_unlocked: { en: "Opened the secrets list", ar: "فتح قائمة الأسرار" },
+  vault_unlock_failed: { en: "Wrong secrets password", ar: "كلمة مرور أسرار خاطئة" },
+  vault_locked_out: { en: "Secrets list locked after repeated wrong passwords", ar: "قفل قائمة الأسرار بعد محاولات خاطئة متكررة" },
+  secret_added: { en: "Added a secret", ar: "إضافة سر" },
+  secret_changed: { en: "Changed a secret", ar: "تعديل سر" },
+  secret_revealed: { en: "Viewed a secret", ar: "عرض سر" },
+  secret_cleared: { en: "Cleared a saved setting", ar: "مسح إعداد محفوظ" },
+  secret_deleted: { en: "Deleted a secret", ar: "حذف سر" },
+  emr_connection_tested: { en: "Tested the EMR connection", ar: "اختبار الاتصال بالسجل الطبي" }
 };
 
 export function AdminPage() {
+  const { t } = useI18n();
+  const [tab, setTab] = useState<"overview" | "secrets">("overview");
+  return (
+    <>
+      <div className="tabs" role="tablist" style={{ marginBottom: 16, borderBottom: "1px solid var(--line)" }}>
+        <button role="tab" type="button" aria-selected={tab === "overview"} onClick={() => setTab("overview")}>{t("adminTabOverview")}</button>
+        <button role="tab" type="button" aria-selected={tab === "secrets"} onClick={() => setTab("secrets")}>{t("adminTabSecrets")}</button>
+      </div>
+      {tab === "overview" ? <Overview /> : <SecretsPanel />}
+    </>
+  );
+}
+
+function Overview() {
   const { t, lang, errText } = useI18n();
   const toast = useToast();
   const [version, setVersion] = useState(0);

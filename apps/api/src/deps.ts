@@ -5,11 +5,13 @@ import type { FileStore, Scanner } from "./lib/files.ts";
 import type { EmrClient } from "./emr/client.ts";
 import type { Notifier } from "./lib/notify.ts";
 import type { Hub } from "./realtime.ts";
+import type { SecretStore } from "./services/secrets.ts";
 
 export type Deps = {
   db: Db;
   config: Config;
   cipher: FieldCipher;
+  secrets: SecretStore;
   files: FileStore;
   scanner: Scanner;
   emr: EmrClient;
