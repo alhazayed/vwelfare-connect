@@ -9,7 +9,8 @@ import { staff } from "../src/db/schema.ts";
 import { FieldCipher, hashPassword } from "../src/lib/crypto.ts";
 import { MemoryStore, noScan } from "../src/lib/files.ts";
 import { ConsoleNotifier } from "../src/lib/notify.ts";
-import { EmrClient } from "../src/emr/client.ts";
+import { emrFromSecrets } from "../src/bootstrap.ts";
+import { SecretStore } from "../src/services/secrets.ts";
 import { Hub } from "../src/realtime.ts";
 import type { Deps } from "../src/deps.ts";
 
@@ -34,11 +35,12 @@ export async function setup() {
   const clock = { now: new Date("2026-10-21T09:00:00Z") }; // a Wednesday, inside default working hours
   const notifier = new ConsoleNotifier(() => {});
   const files = new MemoryStore();
+  const cipher = new FieldCipher(config.FIELD_ENCRYPTION_KEY);
+  const secrets = new SecretStore(db, cipher, config);
   const deps: Deps = {
-    db, config, files, notifier,
-    cipher: new FieldCipher(config.FIELD_ENCRYPTION_KEY),
+    db, config, files, notifier, cipher, secrets,
     scanner: noScan,
-    emr: new EmrClient(emrUrl, "test-client", "test-secret"),
+    emr: emrFromSecrets(secrets),
     hub: new Hub(),
     now: () => clock.now
   };

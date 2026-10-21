@@ -55,6 +55,19 @@ Key files:
 | After-hours automatic reply | Working hours in Chat rules; checked in `addMessage` |
 | Past chats are read-only | Streamed from the EMR, never cached (`cache-control: no-store`); no download, copy or print, watermark, blur when the window loses focus |
 
+## API secrets (super admin)
+
+The super admin's **API secrets** tab lists the addresses and keys of the services the app connects to: the EMR, SMS, email and virus scanning, plus any others you add.
+
+- **Second password.** The tab is locked behind a secrets password, separate from the sign-in password, set by the first super admin who opens it. It stays open for 10 minutes and locks after 5 wrong attempts (for 15 minutes).
+- **Saved values win.** A value saved here is used instead of the `.env` file, straight away and without a restart. Clearing it goes back to `.env`.
+- **Encrypted and audited.** Values are encrypted with `FIELD_ENCRYPTION_KEY`. Secret values are hidden until someone clicks **Show** (they hide again after 30 seconds). Every unlock, view and change goes in the audit log by name; values never do.
+- **The server doesn't need the password.** The app reads the secrets itself, so the EMR connection keeps working when nobody is signed in. The password only controls who can see and change them.
+- **Forgotten password.** It can't be recovered from the app. On the server, stop the app and run `npm run vault:reset -- --confirm`; saved secrets are kept, and the next super admin sets a new password.
+- **Not in this list on purpose:** `FIELD_ENCRYPTION_KEY` and `DATABASE_URL`. The app needs them before it can read the list, so they stay in the server's environment.
+
+Only the EMR settings are used today. SMS, email and virus-scanning settings can be saved now and are marked "Not connected yet" until those integrations are built.
+
 ## Before real patients use it
 
 These are deliberately not finished. Each needs a decision or a service from Vwelfare.
@@ -80,4 +93,5 @@ These are deliberately not finished. Each needs a decision or a service from Vwe
 | `npm run typecheck` | Check types in all apps |
 | `npm run seed` | Add sample accounts (development only) |
 | `npm run otp -- <secret>` | Print the current 6-digit staff code (development only) |
+| `npm run vault:reset -- --confirm` | Remove a forgotten secrets password (run on the server with the app stopped) |
 | `npm run db:generate -w @vwelfare/api` | Create a database migration after changing `schema.ts` |

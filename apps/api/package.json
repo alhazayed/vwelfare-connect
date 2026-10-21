@@ -7,6 +7,7 @@
     "start": "tsx src/server.ts",
     "seed": "tsx src/scripts/seed.ts",
     "otp": "tsx src/scripts/otp.ts",
+    "vault:reset": "tsx src/scripts/vault-reset.ts",
     "db:generate": "drizzle-kit generate",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"

@@ -60,6 +60,7 @@ const en = {
   allow: "Allow", decline: "Decline", granted: "{provider} can read your past chats with your other providers.", withdraw: "Withdraw access",
   pastWith: "Your past chats with {name}",
   // admin
+  adminTabOverview: "Providers and rules", adminTabSecrets: "API secrets",
   provTitle: "Providers", provSub: "Create an account for each provider. Providers then add their own patients by file number.",
   addProvider: "Add provider", nameEn: "Name (English)", nameAr: "Name (Arabic)", specEn: "Specialty (English)", specAr: "Specialty (Arabic)",
   emrStaffId: "EMR staff ID", createProvider: "Create and send invitation", provInvited: "Invitation sent to {email}",
@@ -143,6 +144,7 @@ const ar: Record<Key, string> = {
   reqTitle: "طلب وصول", reqBody: "طلب من {provider} لقراءة محادثاتك السابقة مع مقدمي الرعاية الآخرين. المتاح حالياً هو قائمة التواريخ فقط، دون محتوى المحادثات.",
   allow: "سماح", decline: "رفض", granted: "مسموح لـ {provider} بقراءة محادثاتك السابقة مع مقدمي الرعاية الآخرين.", withdraw: "سحب الإذن",
   pastWith: "محادثاتك السابقة مع {name}",
+  adminTabOverview: "مقدمو الرعاية والقواعد", adminTabSecrets: "أسرار واجهات البرمجة",
   provTitle: "مقدمو الرعاية", provSub: "أنشئ حساباً لكل مقدم رعاية، ثم يضيف كل منهم مرضاه برقم الملف.",
   addProvider: "إضافة مقدم رعاية", nameEn: "الاسم (بالإنجليزية)", nameAr: "الاسم (بالعربية)", specEn: "التخصص (بالإنجليزية)", specAr: "التخصص (بالعربية)",
   emrStaffId: "رقم الموظف في السجل الطبي", createProvider: "إنشاء الحساب وإرسال الدعوة", provInvited: "تم إرسال الدعوة إلى {email}",

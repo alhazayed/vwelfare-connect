@@ -8,6 +8,13 @@
       "when": 1792575462824,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792580161364,
+      "tag": "0001_secrets_vault",
+      "breakpoints": true
     }
   ]
 }
