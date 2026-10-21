@@ -1,0 +1,19 @@
+{
+  "name": "@vwelfare/mock-emr",
+  "private": true,
+  "type": "module",
+  "description": "Stand-in for the EMR vendor's API (R1-R5) until their sandbox is available.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/formbody": "^8.0.2",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0"
+  }
+}

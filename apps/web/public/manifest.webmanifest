@@ -1,0 +1,9 @@
+{
+  "name": "Vwelfare Connect",
+  "short_name": "Vwelfare",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EFF3F1",
+  "theme_color": "#2A6657",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

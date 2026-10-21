@@ -1,0 +1,37 @@
+{
+  "name": "@vwelfare/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "seed": "tsx src/scripts/seed.ts",
+    "otp": "tsx src/scripts/otp.ts",
+    "db:generate": "drizzle-kit generate",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/multipart": "^9.0.3",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/websocket": "^11.1.0",
+    "drizzle-orm": "^0.44.0",
+    "fastify": "^5.2.0",
+    "otplib": "^12.0.1",
+    "pg": "^8.16.0",
+    "qrcode": "^1.5.4",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/ws": "^8.18.2",
+    "@vwelfare/mock-emr": "*",
+    "drizzle-kit": "^0.31.0",
+    "tsx": "^4.20.0",
+    "vitest": "^3.2.0"
+  }
+}

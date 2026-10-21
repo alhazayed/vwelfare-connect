@@ -1,0 +1,24 @@
+{
+  "name": "vwelfare-connect",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "concurrently -k -n emr,api,web -c gray,green,blue \"npm run dev -w @vwelfare/mock-emr\" \"npm run dev -w @vwelfare/api\" \"npm run dev -w @vwelfare/web\"",
+    "seed": "npm run seed -w @vwelfare/api",
+    "otp": "npm run otp -w @vwelfare/api --",
+    "test": "npm run test -w @vwelfare/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "typescript": "~5.9.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

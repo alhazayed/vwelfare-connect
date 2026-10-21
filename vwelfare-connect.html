@@ -1,0 +1,1395 @@
+<title>Vwelfare Connect</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
+<style>
+/* Layout: app shell. Demo bar on top; the role's screen (list + a conversation pane that fills the height, full-screen on phones); a "behind the scenes" rail with EMR calls and demo controls. */
+:root{
+  --bg:#EFF3F1;
+  --surface:#FFFFFF;
+  --sunken:#E6ECE9;
+  --ink:#17231F;
+  --muted:#56645E;
+  --line:#D2DCD7;
+  --field:#7E8C86;
+  --accent:#2A6657;
+  --accent-ink:#FFFFFF;
+  --accent-soft:#DAEAE3;
+  --good:#2E7D4F;
+  --bubble:#FFFFFF;
+  --new:#1F4F8A;
+  --new-soft:#E1EAF6;
+  --warn:#875200;
+  --warn-soft:#F8EDD7;
+  --danger:#9E2F2A;
+  --danger-soft:#F6E1DF;
+  --shadow:0 1px 2px rgba(18,38,30,.06),0 10px 30px rgba(18,38,30,.10);
+  --scrim:rgba(12,22,18,.48);
+  --wm:#7F8C86;
+  --font-display:"Alexandria","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans Arabic","Segoe UI",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1513; --surface:#17201C; --sunken:#0B100E; --ink:#E1E9E5; --muted:#95A39C; --line:#28332F; --field:#6F807A;
+    --accent:#6BB3A0; --accent-ink:#0C1814; --accent-soft:#1B312A; --good:#6CC28B; --bubble:#1E2925;
+    --new:#8DB4E8; --new-soft:#1A2738; --warn:#E0B266; --warn-soft:#2F2617; --danger:#EC8C84; --danger-soft:#38201E;
+    --shadow:0 1px 2px rgba(0,0,0,.35),0 10px 30px rgba(0,0,0,.4); --scrim:rgba(0,0,0,.62); --wm:#9AA7A1;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1513; --surface:#17201C; --sunken:#0B100E; --ink:#E1E9E5; --muted:#95A39C; --line:#28332F; --field:#6F807A;
+  --accent:#6BB3A0; --accent-ink:#0C1814; --accent-soft:#1B312A; --good:#6CC28B; --bubble:#1E2925;
+  --new:#8DB4E8; --new-soft:#1A2738; --warn:#E0B266; --warn-soft:#2F2617; --danger:#EC8C84; --danger-soft:#38201E;
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 10px 30px rgba(0,0,0,.4); --scrim:rgba(0,0,0,.62); --wm:#9AA7A1;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55}
+html[lang="ar"] body{font-size:15.5px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--font-display);font-weight:600;margin:0;text-wrap:balance;line-height:1.25}
+h1{font-size:22px;letter-spacing:-.01em}
+h2{font-size:17px}
+h3{font-size:15px}
+p{margin:0}
+ul,ol{margin:0;padding:0;list-style:none}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.mono{font-family:var(--font-mono);font-size:.92em;direction:ltr;unicode-bidi:isolate}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1380px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* demo bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar-in{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding-block:10px}
+.brand{display:flex;flex-direction:column;margin-inline-end:auto;min-width:0}
+.brand b{font-family:var(--font-display);font-weight:600;font-size:18px;letter-spacing:-.01em}
+.brand span{font-size:13px;color:var(--muted)}
+.tag{font-size:13px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);padding:2px 10px;border-radius:99px;font-weight:500}
+.ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.lbl{font-size:13px;color:var(--muted)}
+.seg{display:inline-flex;background:var(--sunken);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;min-height:36px;padding:6px 12px;border-radius:8px;cursor:pointer;color:var(--muted);font-weight:500;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.pick{border:1px solid var(--field);background:var(--surface);border-radius:10px;min-height:40px;padding:7px 10px;max-width:260px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--field);background:var(--surface);min-height:40px;padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:500;font-size:14px;white-space:nowrap;text-decoration:none;color:var(--ink)}
+.btn:hover{background:var(--sunken)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.07);background:var(--accent)}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:var(--surface)}
+.btn.danger:hover{filter:brightness(1.07);background:var(--danger)}
+.btn.small{min-height:34px;padding:5px 12px;font-size:13px}
+.btn.block{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn svg{width:16px;height:16px;flex:none}
+.btn.help svg{color:var(--danger)}
+.icon-btn{border:0;background:transparent;border-radius:8px;width:40px;height:40px;display:grid;place-items:center;cursor:pointer;color:var(--muted);flex:none}
+.icon-btn:hover{background:var(--sunken);color:var(--ink)}
+.icon-btn svg{width:18px;height:18px}
+@media (pointer:coarse), (max-width:640px){
+  .btn,.btn.small,.seg button,.pick,.tabs button{min-height:44px}
+  .icon-btn{width:44px;height:44px}
+}
+
+/* shell */
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;padding-block:20px 40px;align-items:start}
+@media (max-width:1100px){.layout{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.pad{padding:16px}
+.screen-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+.screen-head p{margin-top:2px}
+.head-actions{display:flex;flex-wrap:wrap;gap:8px}
+.split{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:780px){.split{grid-template-columns:minmax(0,1fr)}}
+
+/* lists */
+.list{padding:6px}
+.list-h{font-size:13px;color:var(--muted);font-family:var(--font-body);font-weight:500;padding:8px 10px 4px}
+.list ul{display:flex;flex-direction:column;gap:2px}
+.pt{width:100%;text-align:start;border:0;background:transparent;border-radius:9px;padding:10px 12px;min-height:56px;cursor:pointer;display:flex;flex-direction:column;gap:3px;color:var(--ink)}
+.pt:hover{background:var(--sunken)}
+.pt.on{background:var(--sunken);box-shadow:inset 0 0 0 1px var(--field)}
+.pt-name{font-weight:600}
+.pt-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;color:var(--muted);font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:13px;line-height:1.5;padding:1px 9px;border-radius:99px;background:var(--sunken);color:var(--muted);font-weight:500;white-space:nowrap}
+.pill.ok::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--good)}
+.pill.new{background:var(--new-soft);color:var(--new)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.danger{background:var(--danger-soft);color:var(--danger)}
+.empty{padding:28px 18px;text-align:center;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.list .empty{padding:18px 10px}
+
+/* pane: fills the height so the message box is always visible */
+.pane{display:flex;flex-direction:column;min-width:0;overflow:hidden;height:clamp(520px, calc(100vh - 170px), 820px)}
+.pane-head{padding:12px 16px 0;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line);flex:none}
+.pane-top{display:flex;align-items:center;gap:8px}
+.who{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;min-width:0;flex:1}
+.back{display:none}
+[dir="rtl"] .back svg{transform:scaleX(-1)}
+.visits{display:flex;align-items:center;gap:6px 10px;min-width:0}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin}
+.chips li{font-size:13px;background:var(--sunken);border-radius:6px;padding:2px 8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tabs{display:flex;gap:4px;margin-bottom:-1px}
+.tabs button{border:0;background:transparent;min-height:40px;padding:8px 12px;cursor:pointer;color:var(--muted);font-weight:500;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.pane-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.pane-body > .empty{flex:1}
+.sess-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 16px;border-bottom:1px solid var(--line);flex:none}
+.sess-bar p{min-width:0;flex:1 1 240px}
+.note{margin:10px 16px 0;padding:10px 12px;border-radius:9px;background:var(--sunken);font-size:14px;flex:none;display:flex;gap:8px;align-items:flex-start}
+.note svg{width:18px;height:18px;flex:none;margin-top:2px}
+.note.warn{background:var(--warn-soft);color:var(--warn)}
+.note.ok{background:var(--accent-soft);color:var(--ink)}
+.note.danger{background:var(--danger-soft);color:var(--ink)}
+.note.danger svg{color:var(--danger)}
+
+/* thread */
+.thread{background:var(--sunken);padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;min-height:0}
+.msg{display:flex;flex-direction:column;align-items:flex-start;max-width:min(80%,560px);gap:3px}
+.msg.mine{align-self:flex-end;align-items:flex-end}
+.bubble{background:var(--bubble);border:1px solid var(--line);border-radius:14px;border-start-start-radius:4px;padding:8px 12px;overflow-wrap:anywhere}
+.msg.mine .bubble{background:var(--accent-soft);border-color:var(--accent-soft);border-start-start-radius:14px;border-start-end-radius:4px}
+.msg.risk .bubble{border:2px solid var(--danger)}
+.meta{font-size:13px;color:var(--muted);padding-inline:4px}
+.sys{align-self:center;font-size:13px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:3px 12px;text-align:center}
+.sys.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent;border-radius:10px;max-width:520px}
+.file{display:flex;flex-direction:column;gap:6px}
+.file img{max-width:220px;border-radius:8px;display:block;-webkit-user-drag:none}
+.file-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.file-row svg{width:18px;height:18px;flex:none}
+.fname{font-weight:500;direction:ltr;unicode-bidi:isolate}
+
+/* composer */
+.composer-wrap{border-top:1px solid var(--line);padding:8px 12px 12px;flex:none;background:var(--surface)}
+.composer-note{font-size:13px;color:var(--muted);margin-bottom:6px}
+.composer{display:flex;align-items:flex-end;gap:8px}
+.composer textarea{flex:1;min-width:0;resize:none;min-height:44px;max-height:140px;border:1px solid var(--field);background:var(--surface);border-radius:10px;padding:10px 12px}
+.attach{position:relative;width:44px;height:44px;flex:none;display:grid;place-items:center;border:1px solid var(--field);border-radius:10px;cursor:pointer;color:var(--ink)}
+.attach:hover{background:var(--sunken)}
+.attach:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.attach svg{width:18px;height:18px}
+.attach input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.composer .send{min-height:44px}
+
+/* urgent help */
+.urgent{margin:10px 16px 0;padding:12px 14px;border-radius:10px;background:var(--danger-soft);border:1px solid var(--danger);display:flex;flex-direction:column;gap:6px;flex:none}
+.urgent b{font-family:var(--font-display);font-weight:600}
+.help-list{display:flex;flex-direction:column;gap:8px}
+.help-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--line)}
+.help-list li > div{display:flex;flex-direction:column;min-width:0}
+.help-num{font-size:20px;font-weight:500;-webkit-user-select:all;user-select:all}
+.call{min-height:44px;padding-inline:18px}
+.call svg{color:inherit}
+
+/* past */
+.past{padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;min-height:0}
+.past h3:not(:first-child){margin-top:12px}
+.recs{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
+.recs li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;flex-wrap:wrap}
+.recs li + li{border-top:1px solid var(--line)}
+.rec-main{display:flex;flex-direction:column;min-width:0}
+.rec-when{font-weight:600}
+.locked{color:var(--muted);display:inline-flex}
+.locked svg{width:18px;height:18px}
+.consent-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.consent-row .note{margin:0}
+
+/* patient */
+.req{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;margin-bottom:14px;border-color:var(--new);background:var(--new-soft)}
+.req > div:first-child{flex:1 1 320px;display:flex;flex-direction:column;gap:4px}
+.grants{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.grant{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;font-size:14px;padding:10px 14px;border-radius:10px;background:var(--sunken)}
+.auth{display:grid;place-items:center;padding-block:24px}
+.auth-card{width:min(440px,100%);display:flex;flex-direction:column;gap:14px;padding:24px}
+.eyebrow{font-size:13px;color:var(--accent);font-weight:600}
+
+/* forms */
+.stack{display:flex;flex-direction:column;gap:12px}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.fld > span{font-weight:500}
+.fld input{border:1px solid var(--field);background:var(--surface);border-radius:9px;min-height:44px;padding:9px 11px;width:100%}
+.unit{display:flex;align-items:center;gap:8px}
+.unit input{width:96px}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.check input{margin-top:4px;flex:none;width:20px;height:20px;accent-color:var(--accent)}
+.err{color:var(--danger);font-size:14px}
+.err:empty{display:none}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.row-form{display:flex;align-items:flex-end;gap:8px}
+.grow{flex:1;min-width:0}
+.emr-box{border:1px dashed var(--accent);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.emr-tag{font-size:13px;font-weight:600;color:var(--accent)}
+.kv{display:flex;flex-direction:column;gap:8px;margin:0}
+.kv > div{display:flex;flex-direction:column;gap:1px}
+.kv dt{font-size:13px;color:var(--muted)}
+.kv dd{margin:0;font-variant-numeric:tabular-nums}
+fieldset.fs{border:1px solid var(--line);border-radius:10px;padding:10px 14px 14px;margin:0;display:flex;flex-direction:column;gap:10px}
+fieldset.fs legend{font-weight:600;font-size:14px;padding-inline:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* admin */
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:620px}
+th,td{text-align:start;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:13px;color:var(--muted);font-weight:500}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums}
+.admin-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;margin-top:16px;align-items:start}
+@media (max-width:900px){.admin-grid{grid-template-columns:minmax(0,1fr)}}
+.admin-grid h2{margin-bottom:4px}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.filters input{flex:1 1 200px;min-width:0;border:1px solid var(--field);background:var(--surface);border-radius:9px;min-height:40px;padding:8px 11px}
+.audit{display:flex;flex-direction:column;margin-top:10px;max-height:460px;overflow-y:auto}
+.audit li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.audit time{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.audit b{font-weight:600;display:block}
+@media (max-width:520px){.audit li{grid-template-columns:minmax(0,1fr)}}
+.add-prov{margin-bottom:16px;display:flex;flex-direction:column;gap:12px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:700px){.grid3,.grid2{grid-template-columns:minmax(0,1fr)}}
+
+/* rail */
+.rail{display:flex;flex-direction:column;gap:12px}
+.rail-head{padding:2px 2px 0;display:flex;flex-direction:column;gap:2px}
+.rail-head h2{font-size:15px;display:flex;align-items:center;gap:8px}
+.rail-head h2::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--muted);flex:none}
+.rail .card{border-style:dashed}
+.rail h3{margin-bottom:10px}
+.okt{color:var(--good);font-weight:600}
+.warnt{color:var(--warn);font-weight:500}
+.conn{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.conn + .conn{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-inline-end:6px;background:var(--good)}
+.dot.off{background:var(--danger)}
+.dot.warn{background:var(--warn)}
+.queue{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.api{display:flex;flex-direction:column;max-height:420px;overflow-y:auto}
+.api li{padding:8px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.api li:first-child{border-top:0;padding-top:0}
+.api-line{display:flex;align-items:baseline;gap:8px;direction:ltr;font-family:var(--font-mono);font-size:13px;min-width:0}
+.api-line code{overflow-wrap:anywhere;min-width:0;flex:1}
+.m{font-weight:600;font-size:12px;padding:0 5px;border-radius:4px;background:var(--new-soft);color:var(--new)}
+.m.POST{background:var(--accent-soft);color:var(--ink)}
+.st{color:var(--good)}
+.st.bad{color:var(--danger)}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:50;display:grid;place-items:center;padding:16px;padding-top:max(16px,env(safe-area-inset-top,0px));padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+.dialog{background:var(--surface);color:var(--ink);border-radius:14px;box-shadow:var(--shadow);width:min(540px,100%);max-height:calc(100vh - 32px);overflow:auto;display:flex;flex-direction:column}
+.dialog.wide{width:min(760px,100%)}
+.dlg-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 18px 10px}
+.dlg-head > div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.dlg-body{padding:0 18px 18px;display:flex;flex-direction:column;gap:12px}
+.steps{display:flex;flex-direction:column;gap:10px}
+.step{display:flex;align-items:center;gap:10px}
+.step svg{width:18px;height:18px;flex:none}
+.step.done svg{color:var(--good)}
+.step.fail svg{color:var(--danger)}
+.step.wait{color:var(--muted)}
+.dot-wait{width:18px;height:18px;border:2px dashed var(--field);border-radius:50%;flex:none}
+.spin{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation:none;border-top-color:var(--accent)}}
+.lock-note{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.lock-note svg{width:16px;height:16px;flex:none}
+.viewer-body{position:relative;border-radius:10px;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.viewer-body .thread{max-height:min(58vh,560px);flex:none}
+.wm{position:absolute;inset:0;pointer-events:none;background-repeat:repeat}
+.away-msg{display:none;position:absolute;inset:0;place-items:center;text-align:center;padding:20px;font-weight:500}
+body.away .viewer-body .thread{filter:blur(12px)}
+body.away .away-msg{display:grid}
+
+/* toast */
+.toast-host{position:fixed;inset-inline:0;bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;pointer-events:none;z-index:60;padding-inline:16px}
+.toast{background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;box-shadow:var(--shadow);font-size:14px;max-width:520px}
+.toast.bad{background:var(--danger);color:var(--surface)}
+
+/* phones: list first, then a full-screen conversation */
+@media (max-width:780px){
+  .split[data-view="list"] .pane{display:none}
+  .split[data-view="pane"] .list{display:none}
+  .split[data-view="pane"] .pane{position:fixed;inset:0;z-index:40;height:auto;border:0;border-radius:0;
+    padding-top:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  .split[data-view="pane"] .composer-wrap{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+  body:has(.split[data-view="pane"]){overflow:hidden}
+  .back{display:grid}
+  .pane-head{padding-top:8px}
+  .help-short{display:none}
+}
+@media (min-width:781px){.help-icon-only{display:none}}
+@media (max-width:640px){.brand span{display:none}.lbl{display:none}}
+@media print{body{display:none!important}}
+</style>
+
+<header class="bar" id="bar"></header>
+<div class="wrap layout">
+  <main id="main"></main>
+  <aside class="rail" id="rail" aria-label="Behind the scenes"></aside>
+</div>
+<div id="modal"></div>
+<div class="toast-host" id="toast" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+
+const RULES = { remindH: 20, autoH: 24, emergency: "", crisisLine: "" };
+const RISK = /(suicid|kill myself|end my life|hurt myself|harm myself|self[- ]harm|want to die|don'?t want to live|انتحار|أنتحر|انتحر|أقتل نفسي|اقتل نفسي|أؤذي نفسي|اؤذي نفسي|إيذاء نفسي|أنهي حياتي|انهي حياتي|أريد أن أموت)/i;
+
+const I18N = {
+en:{
+  tagline:"Secure messaging between patients and their providers", proto:"Prototype · sample data",
+  roleAdmin:"Super admin", roleProvider:"Provider", rolePatient:"Patient", viewAs:"Viewing as", langBtn:"عربي", invitedTag:"invited",
+  provTitle:"Providers", provSub:"Create an account for each provider. Providers then add their own patients by file number.",
+  addProvider:"Add provider", fullName:"Full name", specialty:"Specialty", workEmail:"Work email",
+  createProvider:"Create and send invitation", cancel:"Cancel",
+  colName:"Name", colSpec:"Specialty", colPatients:"Patients", colStatus:"Status", colAction:"Action",
+  active:"Active", deactivated:"Deactivated", deactivate:"Deactivate", reactivate:"Reactivate",
+  provInvited:"Invitation sent to {email}", fillProvider:"Enter a name, specialty and email address.",
+  deactQ:"Deactivate {name}?", deactBody:"{name} is signed out and loses access at once. Their open chats ({n}) are finished and saved to the EMR, and {p} patients will no longer see them in their care team.",
+  deactGo:"Deactivate", deactDone:"{name} deactivated. {n} open chats sent to the EMR.",
+  rulesTitle:"Chat rules", ruleRemind:"Remind the provider to finish an open chat after", ruleAuto:"Finish a chat automatically after no messages for", hoursUnit:"hours",
+  ruleEmergency:"Emergency numbers shown to patients", required:"Required before launch",
+  ruleFiles:"Files that can be shared", ruleFilesVal:"PDF, JPG, PNG, DOCX, M4A · up to 10 MB each", filesNote:"Set by your IT team",
+  ruleKeep:"Kept on the platform after the EMR confirms a chat", ruleKeepVal:"Nothing",
+  saveRules:"Save chat rules", rulesSaved:"Chat rules saved", rulesErr:"Use whole hours, with the reminder before the automatic finish.", numberPh:"Add number",
+  auditTitle:"Audit log", auditSub:"Who did what, and when. Message content never appears here.",
+  auditSearch:"Search by name, file number or record", whoAll:"Everyone", whoProviders:"Providers", whoPatients:"Patients", whoPlatform:"Platform", auditNone:"No entries match.",
+  signedAs:"Signed in as {name}", myPatients:"My patients", addPatient:"Add patient", noPatients:"No patients yet. Add one with their EMR file number.",
+  fileLabel:"File {n}", newMsg:"New message", chatOpen:"Chat open", awaiting:"Invitation sent", waitSync:"Waiting for EMR", riskPill:"Risk words",
+  pickPatient:"Choose a patient to open the conversation.", visitsFromEmr:"Visits",
+  tabCurrent:"Current chat", tabPast:"Past chats", back:"Back",
+  startChat:"Start a chat", noOpenProv:"No open chat with {name}. Start one, or wait for the patient to write.",
+  started:"Started {t}", autoIn:"auto-finishes in {d} if there are no new messages", finishChat:"Finish chat",
+  riskNote:"This chat contains words that may signal risk. Follow the clinical risk protocol.",
+  invitedNote:"{name} hasn't created an account yet. The invitation went to {mobile}. You can chat once they sign up.",
+  lockedNote:"The previous chat is finished and locked. It is removed from the platform as soon as the EMR confirms it was saved.",
+  typeMsg:"Write a message", send:"Send", attach:"Attach a file", you:"You", sent:"Sent",
+  composerNotePt:"Replies within 1 working day · Saved to your medical file", composerNotePv:"Saved to the patient's EMR file when you finish the chat",
+  convStarted:"New conversation started by {name}",
+  autoReply:"Outside working hours. Your message will be read on the next working day. In an emergency, use Need urgent help.",
+  badFile:"This file can't be shared. Use PDF, JPG, PNG, DOCX or M4A, up to 10 MB.",
+  addPatientTitle:"Add a patient", addPatientSub:"Enter the patient's EMR file number. The platform reads only their name and visit dates.",
+  fileNo:"File number", lookup:"Look up", demoFiles:"Sample file numbers: 10633 and 10790 (new), 10517 (already on the platform)",
+  notFound:"No patient with file number {n} in the EMR. Check the number and try again.",
+  emrDown:"The EMR isn't responding right now. Try again in a moment.",
+  fromEmr:"From the EMR", name:"Name", visitDates:"Visit dates",
+  mobileLabel:"Mobile number for the one-time invitation", mobileHint:"Used to send the invitation link, and later for password reset codes.",
+  createPatient:"Create profile and send invitation", badMobile:"Enter a mobile number with at least 8 digits.",
+  alreadyMine:"{name} is already in your patient list.", openPatient:"Open patient",
+  alreadyOnPlatform:"{name} already has an account. You'll be added as one of their providers. No new invitation is needed.",
+  linkPatient:"Add to my patients", patientInvited:"Invitation sent to {name}", patientLinked:"{name} added to your patients",
+  finishQ:"Finish this chat and send it to the EMR?",
+  finishBody:"It will be saved to file {file} as {rec}, with every message and file. After the EMR confirms, the chat is locked and deleted from this platform.",
+  finishGo:"Finish and send to EMR", keepChatting:"Keep chatting",
+  stepLock:"Chat locked", stepBuild:"Record built: {m} messages, {f} files", stepSend:"Sent to the EMR", stepDel:"Deleted from the platform", stepDelWait:"Kept locked until the EMR confirms",
+  stepFail:"The EMR didn't respond. The chat stays locked in the sync queue and is sent automatically when the connection returns.",
+  done:"Done",
+  pastMine:"Your chats with {name}", pastOthers:"Chats with other providers",
+  othersLocked:"Listed only. Reading them needs {name}'s consent.", askConsent:"Ask the patient for access",
+  consentPending:"Request sent. Waiting for the patient to answer.", consentGranted:"The patient allowed you to read these chats.",
+  consentDenied:"The patient declined. You can ask again later.", askAgain:"Ask again",
+  view:"View", noPast:"No past chats yet.", loading:"Loading from the EMR…", msgsFiles:"{m} messages · {f} files", retryLoad:"Try again",
+  readOnly:"Read only. Downloading, copying and printing are turned off.", close:"Close", hiddenAway:"Hidden while this window isn't active",
+  signInTitle:"Sign in", username:"Username", password:"Password", signIn:"Sign in",
+  forgot:"Forgot your password? A reset code is sent to your mobile number.",
+  inviteTitle:"Create your account", inviteBody:"{provider} invited you to message your care team at Vwelfare securely. You only need to do this once.",
+  confirmPw:"Confirm password", pwHint:"At least 8 characters.",
+  consentText:"I understand that my messages and files are saved to my medical file at Vwelfare, that this chat is not for emergencies, and that replies can take up to one working day.",
+  createAccount:"Create account", errUser:"Choose a username of at least 4 characters.", errPw:"Passwords must match and be at least 8 characters long.", errConsent:"Tick the box to agree before continuing.",
+  accountCreated:"Account created. Sign in with your username and password from now on.",
+  hello:"Hello, {name}", signOut:"Sign out", careTeam:"My care team", noTeam:"You have no active providers right now. Please contact the center.",
+  urgentHelp:"Need urgent help?", urgentShort:"Urgent help", helpTitle:"Urgent help",
+  helpBody:"This chat isn't monitored around the clock. If you are in danger or thinking about harming yourself, call now.",
+  emServices:"Emergency services", crisisLine:"Vwelfare crisis line", call:"Call",
+  numberMissing:"Not set yet. The center's admin adds this number before launch.",
+  callHint:"If calling from this screen doesn't work, dial the number shown.",
+  afterHoursTitle:"Your care team is outside working hours", afterHoursBody:"Messages are read on the next working day. If you need help now, call:",
+  riskTitle:"You don't have to wait for a reply", riskBody:"If you are thinking about harming yourself, please call now:",
+  writeTo:"Write to {name}", newConvHint:"No open conversation with {name}. Sending a message starts a new one.",
+  reqTitle:"Access request", reqBody:"{provider} is asking to read your past chats with your other providers. Right now they can see only the list of dates, not what was said.",
+  allow:"Allow", decline:"Decline", granted:"{provider} can read your past chats with your other providers.", withdraw:"Withdraw access",
+  pastWith:"Your past chats with {name}",
+  behind:"Behind the scenes", behindSub:"Not part of the app. Shows what the platform holds and what it asks the EMR.",
+  storeTitle:"Stored on the platform now", stAccounts:"Accounts", stAccountsVal:"{p} providers · {q} patients",
+  stPatients:"Patient details", stPatientsVal:"File numbers only. Names and visit dates are read from the EMR when needed.",
+  stOpen:"Open chats", stOpenVal:"{c} · {m} messages · {f} files", stFinished:"Finished chats", stFinishedVal:"None. Deleted once the EMR confirms.",
+  stQueued:"{n} locked, waiting for the EMR",
+  demoTitle:"Demo controls", emrConn:"EMR connection", online:"Connected", offline:"Not responding (simulated)", simOff:"Simulate outage", simOn:"Restore connection",
+  hoursState:"Working hours", inHours:"Open", afterHours:"After hours (simulated)", simAfter:"Simulate after hours", simDay:"Back to working hours",
+  queueTitle:"Sync queue", retry:"Retry now",
+  apiTitle:"EMR API calls", apiEmpty:"No calls yet. Open a patient or a past chat to see them here.",
+  retNameVisits:"name", retVisits:"visit dates", retRecords:"{n} chat records (dates and providers)", retRecord:"1 chat record", retSaved:"saved {rec}", retNone:"no response", retNotFound:"not found",
+  who_admin:"Super admin", who_system:"Platform", who_patient:"Patient {file}",
+  a_createProvider:"Created a provider account for {name}", a_deactivate:"Deactivated {name}", a_reactivate:"Reactivated {name}", a_rules:"Changed the chat rules",
+  a_createPatient:"Created patient profile {file} and sent an invitation", a_linkPatient:"Added patient {file} to their list",
+  a_accountCreated:"Created their account", a_signIn:"Signed in",
+  a_startChat:"Started a chat with patient {file}", a_patientStart:"Started a chat with {name}",
+  a_finish:"Finished chat {rec}; the EMR saved it", a_queued:"Finished chat {rec}; the EMR didn't respond, so it was queued", a_retry:"Sent queued chat {rec}; the EMR saved it",
+  a_view:"Opened chat record {rec}", a_ask:"Asked patient {file} for access to chats with other providers",
+  a_grant:"Allowed {name} to read chats with other providers", a_deny:"Declined access for {name}", a_revoke:"Withdrew access for {name}",
+  a_risk:"Flagged risk words in patient {file}'s chat with {name}",
+  kb:"KB", mb:"MB", hm:"{h}h {m}m"
+},
+ar:{
+  tagline:"مراسلة آمنة بين المرضى ومقدمي الرعاية", proto:"نموذج أولي · بيانات تجريبية",
+  roleAdmin:"المشرف العام", roleProvider:"مقدم الرعاية", rolePatient:"المريض", viewAs:"العرض بصفة", langBtn:"English", invitedTag:"مدعو",
+  provTitle:"مقدمو الرعاية", provSub:"أنشئ حساباً لكل مقدم رعاية، ثم يضيف كل منهم مرضاه برقم الملف.",
+  addProvider:"إضافة مقدم رعاية", fullName:"الاسم الكامل", specialty:"التخصص", workEmail:"البريد الإلكتروني للعمل",
+  createProvider:"إنشاء الحساب وإرسال الدعوة", cancel:"إلغاء",
+  colName:"الاسم", colSpec:"التخصص", colPatients:"المرضى", colStatus:"الحالة", colAction:"إجراء",
+  active:"نشط", deactivated:"معطّل", deactivate:"تعطيل", reactivate:"إعادة التفعيل",
+  provInvited:"تم إرسال الدعوة إلى {email}", fillProvider:"أدخل الاسم والتخصص والبريد الإلكتروني.",
+  deactQ:"تعطيل حساب {name}؟", deactBody:"يُسجَّل الخروج من حساب {name} ويتوقف الوصول فوراً. تُنهى المحادثات المفتوحة ({n}) وتُحفظ في السجل الطبي، ولن يظهر الحساب بعد الآن في فريق رعاية {p} مرضى.",
+  deactGo:"تعطيل", deactDone:"تم تعطيل حساب {name}. أُرسلت {n} محادثات مفتوحة إلى السجل الطبي.",
+  rulesTitle:"قواعد المحادثة", ruleRemind:"تذكير مقدم الرعاية بإنهاء المحادثة المفتوحة بعد", ruleAuto:"إنهاء المحادثة تلقائياً عند عدم وجود رسائل لمدة", hoursUnit:"ساعة",
+  ruleEmergency:"أرقام الطوارئ التي تظهر للمرضى", required:"مطلوب قبل الإطلاق",
+  ruleFiles:"الملفات التي يمكن مشاركتها", ruleFilesVal:"PDF، JPG، PNG، DOCX، M4A · حتى 10 ميجابايت لكل ملف", filesNote:"يحددها فريق تقنية المعلومات",
+  ruleKeep:"ما يبقى على المنصة بعد تأكيد السجل الطبي", ruleKeepVal:"لا شيء",
+  saveRules:"حفظ قواعد المحادثة", rulesSaved:"تم حفظ قواعد المحادثة", rulesErr:"استخدم عدداً صحيحاً من الساعات، على أن يسبق التذكير الإنهاء التلقائي.", numberPh:"أضف الرقم",
+  auditTitle:"سجل التدقيق", auditSub:"من فعل ماذا ومتى. لا يظهر محتوى الرسائل هنا أبداً.",
+  auditSearch:"ابحث بالاسم أو رقم الملف أو السجل", whoAll:"الجميع", whoProviders:"مقدمو الرعاية", whoPatients:"المرضى", whoPlatform:"المنصة", auditNone:"لا توجد نتائج مطابقة.",
+  signedAs:"مسجّل الدخول: {name}", myPatients:"مرضاي", addPatient:"إضافة مريض", noPatients:"لا يوجد مرضى بعد. أضف مريضاً برقم ملفه في السجل الطبي.",
+  fileLabel:"ملف {n}", newMsg:"رسالة جديدة", chatOpen:"محادثة مفتوحة", awaiting:"تم إرسال الدعوة", waitSync:"بانتظار السجل الطبي", riskPill:"كلمات خطر",
+  pickPatient:"اختر مريضاً لفتح المحادثة.", visitsFromEmr:"الزيارات",
+  tabCurrent:"المحادثة الحالية", tabPast:"المحادثات السابقة", back:"رجوع",
+  startChat:"بدء محادثة", noOpenProv:"لا توجد محادثة مفتوحة مع {name}. ابدأ محادثة أو انتظر حتى يكتب المريض.",
+  started:"بدأت {t}", autoIn:"تنتهي تلقائياً خلال {d} إذا لم تصل رسائل جديدة", finishChat:"إنهاء المحادثة",
+  riskNote:"تحتوي هذه المحادثة على كلمات قد تشير إلى خطر. اتبع بروتوكول تقييم الخطر السريري.",
+  invitedNote:"لم يُنشأ حساب {name} بعد. أُرسلت الدعوة إلى {mobile}. يمكنك بدء المحادثة بعد التسجيل.",
+  lockedNote:"انتهت المحادثة السابقة وأُقفلت. تُحذف من المنصة فور تأكيد السجل الطبي حفظها.",
+  typeMsg:"اكتب رسالة", send:"إرسال", attach:"إرفاق ملف", you:"أنت", sent:"أُرسلت",
+  composerNotePt:"الرد خلال يوم عمل واحد · تُحفظ في ملفك الطبي", composerNotePv:"تُحفظ في ملف المريض بالسجل الطبي عند إنهاء المحادثة",
+  convStarted:"بداية محادثة جديدة من {name}",
+  autoReply:"خارج ساعات العمل. ستُقرأ رسالتك في يوم العمل التالي. في حالة الطوارئ، استخدم «تحتاج مساعدة عاجلة؟».",
+  badFile:"لا يمكن مشاركة هذا الملف. استخدم PDF أو JPG أو PNG أو DOCX أو M4A بحجم لا يتجاوز 10 ميجابايت.",
+  addPatientTitle:"إضافة مريض", addPatientSub:"أدخل رقم ملف المريض في السجل الطبي. تقرأ المنصة الاسم وتواريخ الزيارات فقط.",
+  fileNo:"رقم الملف", lookup:"بحث", demoFiles:"أرقام ملفات تجريبية: 10633 و10790 (جديدة)، 10517 (موجود على المنصة)",
+  notFound:"لا يوجد مريض برقم الملف {n} في السجل الطبي. تحقق من الرقم وحاول مرة أخرى.",
+  emrDown:"السجل الطبي لا يستجيب حالياً. حاول مرة أخرى بعد قليل.",
+  fromEmr:"من السجل الطبي", name:"الاسم", visitDates:"تواريخ الزيارات",
+  mobileLabel:"رقم الجوال لإرسال الدعوة لمرة واحدة", mobileHint:"يُستخدم لإرسال رابط الدعوة، ولاحقاً لرموز إعادة تعيين كلمة المرور.",
+  createPatient:"إنشاء الملف وإرسال الدعوة", badMobile:"أدخل رقم جوال من 8 أرقام على الأقل.",
+  alreadyMine:"{name} ضمن قائمة مرضاك بالفعل.", openPatient:"فتح ملف المريض",
+  alreadyOnPlatform:"لدى {name} حساب بالفعل. ستُضاف كأحد مقدمي الرعاية دون الحاجة إلى دعوة جديدة.",
+  linkPatient:"إضافة إلى مرضاي", patientInvited:"تم إرسال الدعوة إلى {name}", patientLinked:"تمت إضافة {name} إلى مرضاك",
+  finishQ:"إنهاء هذه المحادثة وإرسالها إلى السجل الطبي؟",
+  finishBody:"ستُحفظ في الملف {file} باسم {rec} مع جميع الرسائل والملفات. بعد تأكيد السجل الطبي تُقفل المحادثة وتُحذف من هذه المنصة.",
+  finishGo:"إنهاء وإرسال إلى السجل الطبي", keepChatting:"متابعة المحادثة",
+  stepLock:"تم قفل المحادثة", stepBuild:"تم إعداد السجل: {m} رسائل، {f} ملفات", stepSend:"تم الإرسال إلى السجل الطبي", stepDel:"تم الحذف من المنصة", stepDelWait:"تبقى مقفلة حتى تأكيد السجل الطبي",
+  stepFail:"لم يستجب السجل الطبي. تبقى المحادثة مقفلة في قائمة الانتظار وتُرسل تلقائياً عند عودة الاتصال.",
+  done:"تم",
+  pastMine:"محادثاتك مع {name}", pastOthers:"محادثات مع مقدمي رعاية آخرين",
+  othersLocked:"تظهر في القائمة فقط. قراءتها تتطلب موافقة {name}.", askConsent:"طلب إذن المريض",
+  consentPending:"تم إرسال الطلب. بانتظار رد المريض.", consentGranted:"سمح لك المريض بقراءة هذه المحادثات.",
+  consentDenied:"رفض المريض الطلب. يمكنك الطلب مرة أخرى لاحقاً.", askAgain:"الطلب مرة أخرى",
+  view:"عرض", noPast:"لا توجد محادثات سابقة بعد.", loading:"جارٍ التحميل من السجل الطبي…", msgsFiles:"{m} رسائل · {f} ملفات", retryLoad:"حاول مرة أخرى",
+  readOnly:"للقراءة فقط. التنزيل والنسخ والطباعة معطّلة.", close:"إغلاق", hiddenAway:"المحتوى مخفي عندما لا تكون هذه النافذة نشطة",
+  signInTitle:"تسجيل الدخول", username:"اسم المستخدم", password:"كلمة المرور", signIn:"دخول",
+  forgot:"نسيت كلمة المرور؟ يُرسل رمز إعادة التعيين إلى رقم جوالك.",
+  inviteTitle:"أنشئ حسابك", inviteBody:"وصلتك دعوة من {provider} للتواصل مع فريق رعايتك في Vwelfare بأمان. تحتاج إلى هذه الخطوة مرة واحدة فقط.",
+  confirmPw:"تأكيد كلمة المرور", pwHint:"8 أحرف على الأقل.",
+  consentText:"أفهم أن رسائلي وملفاتي تُحفظ في ملفي الطبي لدى Vwelfare، وأن هذه المحادثة ليست للحالات الطارئة، وأن الرد قد يستغرق حتى يوم عمل واحد.",
+  createAccount:"إنشاء الحساب", errUser:"اختر اسم مستخدم من 4 أحرف على الأقل.", errPw:"يجب أن تتطابق كلمتا المرور وأن تتكون من 8 أحرف على الأقل.", errConsent:"ضع علامة في المربع للموافقة قبل المتابعة.",
+  accountCreated:"تم إنشاء الحساب. استخدم اسم المستخدم وكلمة المرور لتسجيل الدخول من الآن فصاعداً.",
+  hello:"مرحباً، {name}", signOut:"تسجيل الخروج", careTeam:"فريق رعايتي", noTeam:"لا يوجد مقدمو رعاية نشطون حالياً. يرجى التواصل مع المركز.",
+  urgentHelp:"تحتاج مساعدة عاجلة؟", urgentShort:"مساعدة عاجلة", helpTitle:"مساعدة عاجلة",
+  helpBody:"هذه المحادثة غير مراقبة على مدار الساعة. إذا كنت في خطر أو تفكر في إيذاء نفسك، اتصل الآن.",
+  emServices:"خدمات الطوارئ", crisisLine:"خط الأزمات في Vwelfare", call:"اتصال",
+  numberMissing:"لم يُضف بعد. يضيف مشرف المركز هذا الرقم قبل الإطلاق.",
+  callHint:"إذا لم يعمل الاتصال من هذه الشاشة، اطلب الرقم الظاهر.",
+  afterHoursTitle:"فريق رعايتك خارج ساعات العمل", afterHoursBody:"تُقرأ الرسائل في يوم العمل التالي. إذا كنت تحتاج مساعدة الآن، اتصل بـ:",
+  riskTitle:"لا داعي لانتظار الرد", riskBody:"إذا كنت تفكر في إيذاء نفسك، اتصل الآن من فضلك:",
+  writeTo:"اكتب إلى {name}", newConvHint:"لا توجد محادثة مفتوحة مع {name}. إرسال رسالة يبدأ محادثة جديدة.",
+  reqTitle:"طلب وصول", reqBody:"طلب من {provider} لقراءة محادثاتك السابقة مع مقدمي الرعاية الآخرين. المتاح حالياً هو قائمة التواريخ فقط، دون محتوى المحادثات.",
+  allow:"سماح", decline:"رفض", granted:"مسموح لـ {provider} بقراءة محادثاتك السابقة مع مقدمي الرعاية الآخرين.", withdraw:"سحب الإذن",
+  pastWith:"محادثاتك السابقة مع {name}",
+  behind:"خلف الكواليس", behindSub:"ليس جزءاً من التطبيق. يوضح ما تحتفظ به المنصة وما تطلبه من السجل الطبي.",
+  storeTitle:"المخزّن على المنصة الآن", stAccounts:"الحسابات", stAccountsVal:"{p} مقدمي رعاية · {q} مرضى",
+  stPatients:"بيانات المرضى", stPatientsVal:"أرقام الملفات فقط. تُقرأ الأسماء وتواريخ الزيارات من السجل الطبي عند الحاجة.",
+  stOpen:"المحادثات المفتوحة", stOpenVal:"{c} · {m} رسائل · {f} ملفات", stFinished:"المحادثات المنتهية", stFinishedVal:"لا شيء. تُحذف فور تأكيد السجل الطبي.",
+  stQueued:"{n} مقفلة بانتظار السجل الطبي",
+  demoTitle:"عناصر التحكم التجريبية", emrConn:"الاتصال بالسجل الطبي", online:"متصل", offline:"لا يستجيب (محاكاة)", simOff:"محاكاة انقطاع", simOn:"استعادة الاتصال",
+  hoursState:"ساعات العمل", inHours:"خلال الدوام", afterHours:"خارج الدوام (محاكاة)", simAfter:"محاكاة خارج الدوام", simDay:"العودة إلى الدوام",
+  queueTitle:"قائمة انتظار المزامنة", retry:"إعادة المحاولة الآن",
+  apiTitle:"طلبات واجهة السجل الطبي", apiEmpty:"لا توجد طلبات بعد. افتح ملف مريض أو محادثة سابقة لتظهر هنا.",
+  retNameVisits:"الاسم", retVisits:"تواريخ الزيارات", retRecords:"{n} سجلات محادثة (التواريخ ومقدمو الرعاية)", retRecord:"سجل محادثة واحد", retSaved:"تم حفظ {rec}", retNone:"لا استجابة", retNotFound:"غير موجود",
+  who_admin:"المشرف العام", who_system:"المنصة", who_patient:"المريض {file}",
+  a_createProvider:"إنشاء حساب مقدم رعاية لـ {name}", a_deactivate:"تعطيل حساب {name}", a_reactivate:"إعادة تفعيل حساب {name}", a_rules:"تعديل قواعد المحادثة",
+  a_createPatient:"إنشاء ملف المريض {file} وإرسال دعوة", a_linkPatient:"إضافة المريض {file} إلى القائمة",
+  a_accountCreated:"إنشاء الحساب", a_signIn:"تسجيل الدخول",
+  a_startChat:"بدء محادثة مع المريض {file}", a_patientStart:"بدء محادثة مع {name}",
+  a_finish:"إنهاء المحادثة {rec} وحفظها في السجل الطبي", a_queued:"إنهاء المحادثة {rec}؛ لم يستجب السجل الطبي فوُضعت في قائمة الانتظار", a_retry:"إرسال المحادثة المنتظرة {rec} وحفظها في السجل الطبي",
+  a_view:"فتح سجل المحادثة {rec}", a_ask:"طلب إذن المريض {file} لقراءة المحادثات مع مقدمي رعاية آخرين",
+  a_grant:"السماح لـ {name} بقراءة المحادثات مع مقدمي الرعاية الآخرين", a_deny:"رفض طلب {name}", a_revoke:"سحب الإذن من {name}",
+  a_risk:"رصد كلمات خطر في محادثة المريض {file} مع {name}",
+  kb:"ك.ب", mb:"م.ب", hm:"{h} س {m} د"
+}};
+
+const ICON = {
+  file:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
+  clip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>',
+  alert:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>',
+  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+};
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const raw = h => ({ __html: h });
+function t(k, v){
+  v = v || {};
+  const d = I18N[S.lang];
+  const s = d[k] !== undefined ? d[k] : I18N.en[k];
+  if (s === undefined) return esc(k);
+  return s.replace(/\{(\w+)\}/g, (m, x) => v[x] === undefined ? m : (v[x] && v[x].__html !== undefined ? v[x].__html : esc(v[x])));
+}
+const L = v => v == null ? "" : (typeof v === "string" ? v : (v[S.lang] || v.en));
+const loc = () => S.lang === "ar" ? "ar-u-nu-latn" : "en-GB";
+const fDate = d => new Intl.DateTimeFormat(loc(), { day:"numeric", month:"short", year:"numeric" }).format(d);
+const fTime = d => new Intl.DateTimeFormat(loc(), { hour:"2-digit", minute:"2-digit" }).format(d);
+const fDT = d => fDate(d) + " · " + fTime(d);
+const pad = n => String(n).padStart(2, "0");
+const day = s => new Date(s + "T00:00");
+function recName(file, d){ return `${file}_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`; }
+function fDur(ms){ const m = Math.max(0, Math.round(ms/60000)); return t("hm", { h: Math.floor(m/60), m: m%60 }); }
+function fSize(b){ return b >= 1048576 ? (b/1048576).toFixed(1) + " " + t("mb") : Math.max(1, Math.round(b/1024)) + " " + t("kb"); }
+const minsAgo = m => new Date(Date.now() - m*60000);
+const monoRaw = s => raw(`<span class="mono">${esc(s)}</span>`);
+const cleanNum = s => String(s || "").replace(/[^\d+ ]/g, "").trim().slice(0, 20);
+
+/* ---------- mock EMR (the EMR owns this data) ---------- */
+let UID = 0;
+function REC(file, pid, start, mins, msgs){
+  const st = new Date(start);
+  return { uid:"r"+(++UID), id:recName(file, st), file, providerId:pid, start:st, end:new Date(st.getTime()+mins*60000),
+    msgs: msgs.map(([off, from, text, f]) => ({ from, at:new Date(st.getTime()+off*60000), text, file:f })) };
+}
+const EMR = {
+  patients: {
+    "10482": { name:{en:"Layla Hassan", ar:"ليلى حسن"}, visits:["2026-06-03","2026-07-15","2026-09-02","2026-10-07"] },
+    "10517": { name:{en:"Yousef Darwish", ar:"يوسف درويش"}, visits:["2026-08-20","2026-10-01"] },
+    "10633": { name:{en:"Mariam Saleh", ar:"مريم صالح"}, visits:["2026-09-28"] },
+    "10790": { name:{en:"Khaled Ibrahim", ar:"خالد إبراهيم"}, visits:["2026-10-14","2026-10-19"] }
+  },
+  records: {
+    "10482": [
+      REC("10482","p1","2026-09-10T19:42",38,[
+        [0,"patient",{en:"I started the new medication on Monday. I feel a bit nauseous in the mornings. Is that expected?",ar:"بدأت الدواء الجديد يوم الاثنين. أشعر بغثيان خفيف في الصباح، هل هذا متوقع؟"}],
+        [21,"provider",{en:"Yes, mild nausea is common in the first one to two weeks. Take it with breakfast, and keep a short sleep diary for me until your next visit.",ar:"نعم، الغثيان الخفيف شائع في أول أسبوع أو أسبوعين. خذيه مع الإفطار، ودوّني مذكرات نوم قصيرة حتى موعد زيارتك القادمة."}],
+        [38,"patient",{en:"OK, I will. Thank you.",ar:"حسناً، سأفعل. شكراً لك."}]
+      ]),
+      REC("10482","p2","2026-09-24T11:05",52,[
+        [0,"patient",{en:"I tried the thought record you gave me. This is the one from yesterday.",ar:"جرّبت سجل الأفكار الذي أعطيتني إياه. هذا سجل الأمس."}],
+        [1,"patient",null,{name:"thought-record-23-sep.jpg",size:655360}],
+        [52,"provider",{en:"Well done. Notice how the \"evidence against\" column brought your rating down from 90 to 60. We will build on that in our next session.",ar:"أحسنتِ. لاحظي كيف خفّض عمود «الأدلة المعاكسة» تقييمك من 90 إلى 60. سنبني على ذلك في جلستنا القادمة."}]
+      ]),
+      REC("10482","p1","2026-10-09T21:15",26,[
+        [0,"patient",{en:"I picked up the new prescription after Wednesday's visit. Should I start tonight or tomorrow morning?",ar:"استلمت الوصفة الجديدة بعد زيارة الأربعاء. هل أبدأ الليلة أم صباح الغد؟"}],
+        [26,"provider",{en:"Start tonight with the evening dose, as we discussed. Message me here if the sleep problems continue.",ar:"ابدئي الليلة مع الجرعة المسائية كما اتفقنا. راسليني هنا إذا استمرت مشاكل النوم."}]
+      ])
+    ]
+  }
+};
+
+/* ---------- platform data (accounts, links, open chats only) ---------- */
+const P = {
+  providers: [
+    { id:"p1", name:{en:"Dr. Sara Al-Mansour", ar:"د. سارة المنصور"}, spec:{en:"Psychiatrist", ar:"طبيبة نفسية"}, email:"s.almansour@vwelfare.example", active:true },
+    { id:"p2", name:{en:"Omar Khalil", ar:"عمر خليل"}, spec:{en:"Clinical psychologist", ar:"أخصائي نفسي إكلينيكي"}, email:"o.khalil@vwelfare.example", active:true },
+    { id:"p3", name:{en:"Huda Nasser", ar:"هدى ناصر"}, spec:{en:"Family therapist", ar:"معالجة أسرية"}, email:"h.nasser@vwelfare.example", active:true }
+  ],
+  patients: {
+    "10482": { providers:["p1","p2"], status:"active", username:"layla.h", consents:{} },
+    "10517": { providers:["p1"], status:"invited", invitedBy:"p1", mobile:"•••• 4417", consents:{} }
+  },
+  sessions: []
+};
+let SID = 0;
+P.sessions.push({ id:"s"+(++SID), file:"10482", providerId:"p1", start:minsAgo(160), locked:false, msgs:[
+  { from:"system", by:"patient", at:minsAgo(160) },
+  { from:"patient", at:minsAgo(160), text:{en:"Good morning, Dr. Sara. Since we lowered the dose I fall asleep easily, but I wake up around 4 every morning and can't get back to sleep.",ar:"صباح الخير د. سارة. منذ أن خفّضنا الجرعة أنام بسهولة، لكنني أستيقظ حوالي الرابعة كل صباح ولا أستطيع العودة إلى النوم."} },
+  { from:"patient", at:minsAgo(158), file:{ name:"sleep-log-october.pdf", size:186368 } },
+  { from:"provider", at:minsAgo(64), text:{en:"Thank you, Layla. I've looked at your sleep log. Are you taking the evening dose at the same time every night?",ar:"شكراً يا ليلى، اطّلعت على سجل نومك. هل تأخذين الجرعة المسائية في الوقت نفسه كل ليلة؟"} },
+  { from:"patient", at:minsAgo(58), text:{en:"Mostly around 10 pm. Later on weekends.",ar:"غالباً حوالي العاشرة مساءً، ومتأخرة أكثر في عطلة نهاية الأسبوع."} }
+]});
+
+const AUDIT = [
+  { at:new Date("2026-09-01T09:02"), who:"admin", act:"createProvider", args:{pid:"p1"} },
+  { at:new Date("2026-09-01T09:05"), who:"admin", act:"createProvider", args:{pid:"p2"} },
+  { at:new Date("2026-09-01T09:07"), who:"admin", act:"createProvider", args:{pid:"p3"} },
+  { at:new Date("2026-09-02T13:20"), who:"p1", act:"createPatient", args:{file:"10482"} },
+  { at:new Date("2026-09-02T18:41"), who:"patient:10482", act:"accountCreated", args:{} },
+  { at:new Date("2026-09-10T20:24"), who:"p1", act:"finish", args:{rec:"10482_2026-09-10_19-42"} },
+  { at:new Date("2026-09-15T10:12"), who:"p2", act:"linkPatient", args:{file:"10482"} },
+  { at:new Date("2026-09-24T12:01"), who:"p2", act:"finish", args:{rec:"10482_2026-09-24_11-05"} },
+  { at:new Date("2026-10-09T21:44"), who:"p1", act:"finish", args:{rec:"10482_2026-10-09_21-15"} },
+  { at:new Date("2026-10-20T15:31"), who:"p1", act:"createPatient", args:{file:"10517"} },
+  { at:minsAgo(160), who:"patient:10482", act:"patientStart", args:{pid:"p1"} }
+];
+
+/* ---------- UI state ---------- */
+const S = {
+  lang:"en", role:"provider", me:"p1", patient:"10482",
+  sel:"10482", tab:"current", pvView:"list", ptSel:"p1", ptTab:"current", ptView:"list",
+  signedIn:{}, drafts:{}, modal:null, emrOnline:true, afterHours:false, log:[], queue:[], past:null,
+  addProv:false, auditQ:"", auditWho:"all", focus:null, toast:null
+};
+
+const prov = id => P.providers.find(p => p.id === id);
+const openSess = (f, pid) => P.sessions.find(s => s.file === f && s.providerId === pid && !s.locked);
+const lockedSess = (f, pid) => P.sessions.find(s => s.file === f && s.providerId === pid && s.locked);
+const lastAt = s => s.msgs[s.msgs.length-1].at;
+const ptName = f => L(EMR.patients[f].name);
+const countMsgs = msgs => msgs.filter(m => m.from !== "system" && !m.file).length;
+const countFiles = msgs => msgs.filter(m => m.file).length;
+const activeTeam = pt => pt.providers.filter(pid => prov(pid) && prov(pid).active);
+
+function audit(who, act, args){ AUDIT.push({ at:new Date(), who, act, args:args || {} }); }
+
+let LOGID = 0;
+function emr(method, path, ret, status){
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      const ok = S.emrOnline;
+      const code = ok ? (status || 200) : 503;
+      S.log.unshift({ id:++LOGID, at:new Date(), method, path, status:code, ret: ok ? ret : { k:"retNone" } });
+      S.log = S.log.slice(0, 40);
+      renderRail();
+      ok ? resolve(code) : reject(new Error("EMR unavailable"));
+    }, 380);
+  });
+}
+
+function toast(html, kind){
+  const id = Date.now();
+  S.toast = { html, kind, id };
+  renderToast();
+  setTimeout(() => { if (S.toast && S.toast.id === id){ S.toast = null; renderToast(); } }, 3800);
+}
+
+/* ---------- shared pieces ---------- */
+function tabs(act, cur){
+  return `<div class="tabs" role="tablist">${["current","past"].map(k =>
+    `<button role="tab" type="button" aria-selected="${cur===k}" data-act="${act}" data-v="${k}">${t(k==="current"?"tabCurrent":"tabPast")}</button>`).join("")}</div>`;
+}
+function backBtn(){ return `<button type="button" class="icon-btn back" data-act="back" aria-label="${t("back")}">${ICON.back}</button>`; }
+function helpBtn(short){
+  return `<button type="button" class="btn help${short ? " small" : ""}" data-act="help">${ICON.phone}<span${short ? ` class="help-short"` : ""}>${t(short ? "urgentShort" : "urgentHelp")}</span></button>`;
+}
+function helpNumbersHTML(){
+  const rows = [["emServices", RULES.emergency], ["crisisLine", RULES.crisisLine]];
+  return `<ul class="help-list">${rows.map(([k, num]) => `<li><div><b>${t(k)}</b>${num ? `<span class="mono help-num">${esc(num)}</span>` : `<span class="muted small">${t("numberMissing")}</span>`}</div>
+    ${num ? `<a class="btn primary call" href="tel:${esc(num.replace(/\s/g, ""))}">${ICON.phone}${t("call")}</a>` : ""}</li>`).join("")}</ul>`;
+}
+function urgentCard(titleKey, bodyKey){
+  return `<div class="urgent" role="alert"><b>${t(titleKey)}</b><p>${t(bodyKey)}</p>${helpNumbersHTML()}</div>`;
+}
+function fileHTML(f){
+  const img = f.url ? `<img src="${f.url}" alt="" draggable="false">` : "";
+  return `<div class="file">${img}<div class="file-row">${ICON.file}<span class="fname">${esc(f.name)}</span><span class="muted small">${fSize(f.size)}</span></div></div>`;
+}
+function msgHTML(m, viewer, s){
+  if (m.from === "system"){
+    if (m.kind === "afterhours") return `<div class="sys warn">${t("autoReply")}</div>`;
+    const who = m.by === "patient" ? ptName(s.file) : L(prov(s.providerId).name);
+    return `<div class="sys">${t("convStarted", { name:who })} · ${fDT(m.at)}</div>`;
+  }
+  const mine = viewer === "patient" ? m.from === "patient" : (m.from === "provider" && s.providerId === S.me);
+  const who = mine ? t("you") : esc(m.from === "patient" ? ptName(s.file) : L(prov(s.providerId).name));
+  const body = m.file ? fileHTML(m.file) : `<p>${esc(L(m.text))}</p>`;
+  const risk = m.risk && viewer === "provider";
+  return `<div class="msg${mine ? " mine" : ""}${risk ? " risk" : ""}"><div class="bubble">${body}</div><div class="meta">${who} · ${fTime(m.at)}${mine ? " · " + t("sent") + " ✓" : ""}${risk ? ` · <span class="pill danger">${t("riskPill")}</span>` : ""}</div></div>`;
+}
+function threadHTML(s, viewer){
+  return `<div class="thread" role="log">${s.msgs.map(m => msgHTML(m, viewer, s)).join("")}</div>`;
+}
+function composerHTML(key, role, placeholder){
+  return `<div class="composer-wrap"><p class="composer-note">${t(role === "patient" ? "composerNotePt" : "composerNotePv")}</p>
+    <form class="composer" data-submit="send" data-key="${key}" data-role="${role}">
+    <label class="attach" title="${t("attach")}">${ICON.clip}<span class="vh">${t("attach")}</span><input type="file" id="file-${key}" data-file="${key}" data-role="${role}" accept=".pdf,.jpg,.jpeg,.png,.docx,.m4a"></label>
+    <textarea id="draft-${key}" data-draft="${key}" rows="1" placeholder="${placeholder}" aria-label="${placeholder}">${esc(S.drafts[key] || "")}</textarea>
+    <button class="btn primary send" type="submit">${t("send")}</button>
+  </form></div>`;
+}
+function countdownText(s){ return t("autoIn", { d: fDur(lastAt(s).getTime() + RULES.autoH*3600e3 - Date.now()) }); }
+
+/* ---------- past chats (read from EMR every time) ---------- */
+function loadPast(role, f, pid, key){
+  S.past = { key, loading:true };
+  const all = EMR.records[f] || [];
+  const items = role === "patient" ? all.filter(r => r.providerId === pid) : all.slice();
+  const q = role === "patient" ? `?provider=${pid}` : "";
+  emr("GET", `/patients/${f}/chat-records${q}`, { k:"retRecords", v:{ n:items.length } })
+    .then(() => { if (S.past && S.past.key === key){ S.past = { key, items: items.sort((a,b) => b.start - a.start) }; renderMain(); } })
+    .catch(() => { if (S.past && S.past.key === key){ S.past = { key, error:true }; renderMain(); } });
+}
+function recList(items, canView, showProvider){
+  if (!items.length) return `<p class="muted">${t("noPast")}</p>`;
+  return `<ul class="recs">${items.map(r => `<li>
+    <div class="rec-main"><span class="rec-when">${fDT(r.start)}</span>
+    <span class="muted small">${showProvider ? esc(L(prov(r.providerId).name)) + " · " : ""}${t("msgsFiles", { m:countMsgs(r.msgs), f:countFiles(r.msgs) })} · <span class="mono">${esc(r.id)}</span></span></div>
+    ${canView ? `<button type="button" class="btn small" data-act="viewRec" data-v="${r.uid}">${t("view")}</button>` : `<span class="locked" title="${t("askConsent")}">${ICON.lock}</span>`}
+  </li>`).join("")}</ul>`;
+}
+function pastHTML(role, f, pid){
+  const key = `${role}:${f}:${pid}`;
+  if (!S.past || S.past.key !== key) loadPast(role, f, pid, key);
+  const st = S.past;
+  if (st.loading) return `<div class="empty"><span class="spin"></span>${t("loading")}</div>`;
+  if (st.error) return `<div class="empty"><p>${t("emrDown")}</p><button type="button" class="btn" data-act="reloadPast">${t("retryLoad")}</button></div>`;
+  if (role === "patient") return `<div class="past"><h3>${t("pastWith", { name:L(prov(pid).name) })}</h3>${recList(st.items, true, false)}</div>`;
+  const nm = ptName(f);
+  const mine = st.items.filter(r => r.providerId === pid);
+  const others = st.items.filter(r => r.providerId !== pid);
+  let out = `<div class="past"><h3>${t("pastMine", { name:nm })}</h3>${recList(mine, true, false)}`;
+  if (others.length){
+    const c = P.patients[f].consents[pid];
+    const state =
+      c === "granted" ? `<p class="note ok">${t("consentGranted")}</p>` :
+      c === "pending" ? `<p class="note">${t("consentPending")}</p>` :
+      c === "denied"  ? `<p class="note warn">${t("consentDenied")}</p><button type="button" class="btn small" data-act="askConsent">${t("askAgain")}</button>` :
+      `<p class="muted">${t("othersLocked", { name:nm })}</p><button type="button" class="btn small" data-act="askConsent">${ICON.lock}${t("askConsent")}</button>`;
+    out += `<h3>${t("pastOthers")}</h3><div class="consent-row">${state}</div>${recList(others, c === "granted", true)}`;
+  }
+  return out + `</div>`;
+}
+
+/* ---------- top bar ---------- */
+function barHTML(){
+  const roles = [["admin","roleAdmin"],["provider","roleProvider"],["patient","rolePatient"]].map(([r,k]) =>
+    `<button type="button" data-act="role" data-v="${r}" aria-pressed="${S.role===r}">${t(k)}</button>`).join("");
+  let pick = "";
+  if (S.role === "provider"){
+    pick = `<select id="pick-provider" class="pick" data-pick="provider" aria-label="${t("roleProvider")}">${P.providers.filter(p => p.active).map(p =>
+      `<option value="${p.id}"${p.id===S.me?" selected":""}>${esc(L(p.name))}</option>`).join("")}</select>`;
+  } else if (S.role === "patient"){
+    pick = `<select id="pick-patient" class="pick" data-pick="patient" aria-label="${t("rolePatient")}">${Object.keys(P.patients).map(f =>
+      `<option value="${f}"${f===S.patient?" selected":""}>${esc(ptName(f))} · ${f}${P.patients[f].status==="invited" ? " (" + t("invitedTag") + ")" : ""}</option>`).join("")}</select>`;
+  }
+  return `<div class="wrap bar-in">
+    <div class="brand"><b>Vwelfare Connect</b><span>${t("tagline")}</span></div>
+    <span class="tag">${t("proto")}</span>
+    <div class="ctrl"><span class="lbl">${t("viewAs")}</span><div class="seg" role="group" aria-label="${t("viewAs")}">${roles}</div>${pick}</div>
+    <button type="button" class="btn" data-act="lang" lang="${S.lang==="en"?"ar":"en"}">${t("langBtn")}</button>
+  </div>`;
+}
+
+/* ---------- super admin ---------- */
+function auditEntries(){
+  return AUDIT.slice().sort((a,b) => b.at - a.at).map(a => {
+    const v = Object.assign({}, a.args);
+    if (v.pid) v.name = L(prov(v.pid).name);
+    if (v.rec) v.rec = monoRaw(v.rec);
+    if (v.file) v.file = monoRaw(v.file);
+    let who, type;
+    if (a.who === "admin"){ who = t("who_admin"); type = "admin"; }
+    else if (a.who === "system"){ who = t("who_system"); type = "system"; }
+    else if (a.who.indexOf("patient:") === 0){ who = t("who_patient", { file: a.who.slice(8) }); type = "patient"; }
+    else { who = esc(L(prov(a.who).name)); type = "provider"; }
+    const html = `<li><time>${fDT(a.at)}</time><div><b>${who}</b>${t("a_" + a.act, v)}</div></li>`;
+    return { html, type, text: html.replace(/<[^>]+>/g, " ").toLowerCase() };
+  });
+}
+function auditListHTML(){
+  const q = S.auditQ.trim().toLowerCase();
+  const rows = auditEntries().filter(e => (S.auditWho === "all" || e.type === S.auditWho) && (!q || e.text.indexOf(q) !== -1)).slice(0, 60);
+  return rows.length ? rows.map(e => e.html).join("") : `<li class="muted">${t("auditNone")}</li>`;
+}
+function adminHTML(){
+  const rows = P.providers.map(p => {
+    const n = Object.values(P.patients).filter(x => x.providers.includes(p.id)).length;
+    return `<tr><td><b>${esc(L(p.name))}</b><div class="muted small"><span class="mono">${esc(p.email)}</span></div></td>
+      <td>${esc(L(p.spec))}</td><td class="num">${n}</td>
+      <td><span class="pill${p.active ? " ok" : ""}">${t(p.active ? "active" : "deactivated")}</span></td>
+      <td><button type="button" class="btn small" data-act="toggleProv" data-v="${p.id}">${t(p.active ? "deactivate" : "reactivate")}</button></td></tr>`;
+  }).join("");
+  const form = S.addProv ? `<form class="card pad add-prov" data-submit="addProv">
+      <div class="grid3">
+        <label class="fld"><span>${t("fullName")}</span><input id="np-name" autocomplete="off"></label>
+        <label class="fld"><span>${t("specialty")}</span><input id="np-spec" autocomplete="off"></label>
+        <label class="fld"><span>${t("workEmail")}</span><input id="np-email" type="email" dir="ltr" autocomplete="off"></label>
+      </div>
+      <p class="err" id="np-err" aria-live="polite"></p>
+      <div class="actions"><button type="button" class="btn" data-act="toggleAddProv">${t("cancel")}</button><button class="btn primary" type="submit">${t("createProvider")}</button></div>
+    </form>` : "";
+  const missing = !RULES.emergency || !RULES.crisisLine;
+  const whoOpts = [["all","whoAll"],["admin","who_admin"],["provider","whoProviders"],["patient","whoPatients"],["system","whoPlatform"]].map(([v,k]) =>
+    `<option value="${v}"${S.auditWho===v?" selected":""}>${t(k, { file:"" })}</option>`).join("");
+  return `<div class="screen-head"><div><h1>${t("provTitle")}</h1><p class="muted">${t("provSub")}</p></div>
+      ${S.addProv ? "" : `<button type="button" class="btn primary" data-act="toggleAddProv">+ ${t("addProvider")}</button>`}</div>
+    ${form}
+    <div class="card table-wrap"><table>
+      <thead><tr><th>${t("colName")}</th><th>${t("colSpec")}</th><th>${t("colPatients")}</th><th>${t("colStatus")}</th><th><span class="vh">${t("colAction")}</span></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="admin-grid">
+      <form class="card pad stack" data-submit="rules" novalidate><h2>${t("rulesTitle")}</h2>
+        <div class="grid2">
+          <label class="fld"><span>${t("ruleRemind")}</span><span class="unit"><input id="rl-remind" type="number" min="1" max="168" step="1" value="${RULES.remindH}" inputmode="numeric"><span class="muted">${t("hoursUnit")}</span></span></label>
+          <label class="fld"><span>${t("ruleAuto")}</span><span class="unit"><input id="rl-auto" type="number" min="1" max="168" step="1" value="${RULES.autoH}" inputmode="numeric"><span class="muted">${t("hoursUnit")}</span></span></label>
+        </div>
+        <fieldset class="fs"><legend>${t("ruleEmergency")}${missing ? `<span class="pill warn">${t("required")}</span>` : ""}</legend>
+          <label class="fld"><span>${t("emServices")}</span><input id="rl-em" type="tel" dir="ltr" value="${esc(RULES.emergency)}" placeholder="${t("numberPh")}" autocomplete="off"></label>
+          <label class="fld"><span>${t("crisisLine")}</span><input id="rl-crisis" type="tel" dir="ltr" value="${esc(RULES.crisisLine)}" placeholder="${t("numberPh")}" autocomplete="off"></label>
+        </fieldset>
+        <dl class="kv">
+          <div><dt>${t("ruleFiles")}</dt><dd>${t("ruleFilesVal")} <span class="muted small">· ${t("filesNote")}</span></dd></div>
+          <div><dt>${t("ruleKeep")}</dt><dd><b class="okt">${t("ruleKeepVal")}</b></dd></div>
+        </dl>
+        <p class="err" id="rl-err" aria-live="polite"></p>
+        <div class="actions"><button class="btn primary" type="submit">${t("saveRules")}</button></div>
+      </form>
+      <section class="card pad"><h2>${t("auditTitle")}</h2><p class="muted small">${t("auditSub")}</p>
+        <div class="filters"><input id="audit-q" type="search" data-audit="q" value="${esc(S.auditQ)}" placeholder="${t("auditSearch")}" aria-label="${t("auditSearch")}">
+          <select id="audit-who" class="pick" data-audit="who" aria-label="${t("colName")}">${whoOpts}</select></div>
+        <ol class="audit" id="audit-list">${auditListHTML()}</ol></section>
+    </div>`;
+}
+
+/* ---------- provider ---------- */
+function providerHTML(){
+  if (!prov(S.me) || !prov(S.me).active){
+    const first = P.providers.find(p => p.active);
+    if (!first) return `<div class="empty">${t("noPatients")}</div>`;
+    S.me = first.id; S.sel = null;
+  }
+  const me = prov(S.me);
+  const mine = Object.keys(P.patients).filter(f => P.patients[f].providers.includes(S.me));
+  if (!mine.includes(S.sel)) S.sel = mine[0] || null;
+  const items = mine.map(f => {
+    const pt = P.patients[f], s = openSess(f, S.me), lk = lockedSess(f, S.me);
+    let pill = "";
+    if (pt.status === "invited") pill = `<span class="pill warn">${t("awaiting")}</span>`;
+    else if (lk) pill = `<span class="pill warn">${t("waitSync")}</span>`;
+    if (s){
+      if (s.risk) pill += `<span class="pill danger">${t("riskPill")}</span>`;
+      const last = s.msgs[s.msgs.length-1];
+      pill += last.from === "patient" ? `<span class="pill new">${t("newMsg")}</span>` : `<span class="pill ok">${t("chatOpen")}</span>`;
+    }
+    return `<li><button type="button" class="pt${f===S.sel ? " on" : ""}" data-act="selPatient" data-v="${f}" aria-current="${f===S.sel}">
+      <span class="pt-name">${esc(ptName(f))}</span><span class="pt-meta"><span class="mono">${f}</span>${pill}</span></button></li>`;
+  }).join("");
+  return `<div class="screen-head"><div><h1>${t("myPatients")}</h1><p class="muted">${t("signedAs", { name:L(me.name) })} · ${esc(L(me.spec))}</p></div>
+      <button type="button" class="btn" data-act="openAdd">+ ${t("addPatient")}</button></div>
+    <div class="split" data-view="${S.pvView}">
+      <aside class="card list"><ul>${items || `<li class="empty">${t("noPatients")}</li>`}</ul></aside>
+      <section class="card pane">${S.sel ? providerPane(S.sel) : `<div class="empty">${t("pickPatient")}</div>`}</section>
+    </div>`;
+}
+function providerPane(f){
+  const e = EMR.patients[f];
+  const head = `<header class="pane-head">
+      <div class="pane-top">${backBtn()}<div class="who"><h2>${esc(ptName(f))}</h2><span class="muted">${t("fileLabel", { n:monoRaw(f) })}</span></div></div>
+      <div class="visits"><span class="muted small">${t("visitsFromEmr")}</span><ul class="chips">${e.visits.slice().reverse().map(d => `<li>${fDate(day(d))}</li>`).join("")}</ul></div>
+      ${tabs("ptab", S.tab)}
+    </header>`;
+  return head + `<div class="pane-body">${S.tab === "current" ? providerCurrent(f) : pastHTML("provider", f, S.me)}</div>`;
+}
+function providerCurrent(f){
+  const pt = P.patients[f], nm = ptName(f);
+  if (pt.status === "invited") return `<div class="empty">${t("invitedNote", { name:nm, mobile:monoRaw(pt.mobile) })}</div>`;
+  const s = openSess(f, S.me), lk = lockedSess(f, S.me);
+  let out = lk ? `<p class="note warn">${t("lockedNote")}</p>` : "";
+  if (s){
+    out += `<div class="sess-bar"><p class="muted small">${t("started", { t:fDT(s.start) })} · <span class="countdown" data-sid="${s.id}">${countdownText(s)}</span></p>
+        <button type="button" class="btn primary" data-act="finish" data-v="${s.id}">${ICON.lock}${t("finishChat")}</button></div>`
+      + (s.risk ? `<p class="note danger">${ICON.alert}<span>${t("riskNote")}</span></p>` : "")
+      + threadHTML(s, "provider") + composerHTML(`pv:${f}:${S.me}`, "provider", t("typeMsg"));
+  } else {
+    out += `<div class="empty"><p>${t("noOpenProv", { name:nm })}</p><button type="button" class="btn primary" data-act="startChat">${t("startChat")}</button></div>`;
+  }
+  return out;
+}
+
+/* ---------- patient ---------- */
+function patientHTML(){
+  const f = S.patient, pt = P.patients[f];
+  if (!pt) return "";
+  if (pt.status === "invited") return inviteHTML(f, pt);
+  if (!S.signedIn[f]) return loginHTML(f, pt);
+  const teamIds = activeTeam(pt);
+  if (!teamIds.includes(S.ptSel)) S.ptSel = teamIds[0] || null;
+  const nm = ptName(f);
+  const reqs = teamIds.filter(pid => pt.consents[pid] === "pending").map(pid =>
+    `<div class="card req"><div><h3>${t("reqTitle")}</h3><p>${t("reqBody", { provider:L(prov(pid).name) })}</p></div>
+      <div class="actions"><button type="button" class="btn" data-act="consent" data-pid="${pid}" data-ans="denied">${t("decline")}</button>
+      <button type="button" class="btn primary" data-act="consent" data-pid="${pid}" data-ans="granted">${t("allow")}</button></div></div>`).join("");
+  const grants = teamIds.filter(pid => pt.consents[pid] === "granted").map(pid =>
+    `<div class="grant"><span>${t("granted", { provider:L(prov(pid).name) })}</span><button type="button" class="btn small" data-act="revoke" data-pid="${pid}">${t("withdraw")}</button></div>`).join("");
+  const team = teamIds.map(pid => {
+    const p = prov(pid), s = openSess(f, pid);
+    const pill = s ? (s.msgs[s.msgs.length-1].from === "provider" ? `<span class="pill new">${t("newMsg")}</span>` : `<span class="pill ok">${t("chatOpen")}</span>`) : "";
+    return `<li><button type="button" class="pt${pid===S.ptSel ? " on" : ""}" data-act="ptSel" data-v="${pid}" aria-current="${pid===S.ptSel}">
+      <span class="pt-name">${esc(L(p.name))}</span><span class="pt-meta"><span>${esc(L(p.spec))}</span>${pill}</span></button></li>`;
+  }).join("");
+  let pane;
+  if (!S.ptSel) pane = `<div class="empty">${t("noTeam")}</div>`;
+  else {
+    const p = prov(S.ptSel);
+    pane = `<header class="pane-head"><div class="pane-top">${backBtn()}<div class="who"><h2>${esc(L(p.name))}</h2><span class="muted">${esc(L(p.spec))}</span></div>${helpBtn(true)}</div>${tabs("pttab", S.ptTab)}</header>`
+      + `<div class="pane-body">${S.ptTab === "current" ? patientCurrent(f, S.ptSel) : pastHTML("patient", f, S.ptSel)}</div>`;
+  }
+  return `<div class="screen-head"><div><h1>${t("hello", { name:nm.split(" ")[0] })}</h1><p class="muted">${esc(pt.username)} · ${t("fileLabel", { n:monoRaw(f) })}</p></div>
+      <div class="head-actions">${helpBtn(false)}<button type="button" class="btn" data-act="signOut">${t("signOut")}</button></div></div>
+    ${reqs}${grants ? `<div class="grants">${grants}</div>` : ""}
+    <div class="split" data-view="${S.ptView}">
+      <aside class="card list"><h2 class="list-h">${t("careTeam")}</h2><ul>${team || `<li class="empty">${t("noTeam")}</li>`}</ul></aside>
+      <section class="card pane">${pane}</section>
+    </div>`;
+}
+function patientCurrent(f, pid){
+  const s = openSess(f, pid), nm = L(prov(pid).name);
+  const banner = s && s.risk ? urgentCard("riskTitle", "riskBody") : S.afterHours ? urgentCard("afterHoursTitle", "afterHoursBody") : "";
+  return banner + (s ? threadHTML(s, "patient") : `<div class="empty">${t("newConvHint", { name:nm })}</div>`)
+    + composerHTML(`pt:${f}:${pid}`, "patient", t("writeTo", { name:nm }));
+}
+function loginHTML(f, pt){
+  return `<div class="auth"><div class="card auth-card">
+    <p class="eyebrow">Vwelfare Connect</p><h1>${t("signInTitle")}</h1>
+    <form data-submit="signIn" class="stack">
+      <label class="fld"><span>${t("username")}</span><input id="li-user" value="${esc(pt.username)}" autocomplete="off" dir="ltr"></label>
+      <label class="fld"><span>${t("password")}</span><input id="li-pw" type="password" value="sample-only" autocomplete="off" dir="ltr"></label>
+      <button class="btn primary block" type="submit">${t("signIn")}</button>
+      <p class="muted small">${t("forgot")}</p>
+    </form>${helpBtn(false)}</div></div>`;
+}
+function inviteHTML(f, pt){
+  return `<div class="auth"><div class="card auth-card">
+    <p class="eyebrow">Vwelfare Connect</p><h1>${t("inviteTitle")}</h1>
+    <p>${t("inviteBody", { provider:L(prov(pt.invitedBy).name) })}</p>
+    <form data-submit="invite" class="stack" novalidate>
+      <label class="fld"><span>${t("username")}</span><input id="inv-user" autocomplete="off" dir="ltr"></label>
+      <label class="fld"><span>${t("password")}</span><input id="inv-pw" type="password" autocomplete="new-password" dir="ltr"><small class="muted">${t("pwHint")}</small></label>
+      <label class="fld"><span>${t("confirmPw")}</span><input id="inv-pw2" type="password" autocomplete="new-password" dir="ltr"></label>
+      <label class="check"><input id="inv-consent" type="checkbox"><span>${t("consentText")}</span></label>
+      <p class="err" id="inv-err" aria-live="polite"></p>
+      <button class="btn primary block" type="submit">${t("createAccount")}</button>
+    </form></div></div>`;
+}
+
+/* ---------- rail ---------- */
+function renderRail(){
+  const open = P.sessions.filter(s => !s.locked);
+  const m = open.reduce((n, s) => n + countMsgs(s.msgs), 0);
+  const fl = open.reduce((n, s) => n + countFiles(s.msgs), 0);
+  const q = S.queue.length;
+  const logs = S.log.map(l => `<li><div class="api-line"><span class="m ${l.method}">${l.method}</span><code>${esc(l.path)}</code><span class="st${l.status >= 400 ? " bad" : ""}">${l.status}</span></div>
+    <div class="muted small">${t(l.ret.k, l.ret.v)} · ${fTime(l.at)}</div></li>`).join("");
+  const queue = q ? `<div class="queue"><b class="small">${t("queueTitle")}</b>${S.queue.map(id => {
+      const s = P.sessions.find(x => x.id === id); return s ? `<span class="mono small">${recName(s.file, s.start)}</span>` : "";
+    }).join("")}<div><button type="button" class="btn small" data-act="retry"${S.emrOnline ? "" : " disabled"}>${t("retry")}</button></div></div>` : "";
+  $("#rail").innerHTML = `<div class="rail-head"><h2>${t("behind")}</h2><p class="muted small">${t("behindSub")}</p></div>
+    <section class="card pad"><h3>${t("storeTitle")}</h3><dl class="kv">
+      <div><dt>${t("stAccounts")}</dt><dd>${t("stAccountsVal", { p:P.providers.length, q:Object.keys(P.patients).length })}</dd></div>
+      <div><dt>${t("stPatients")}</dt><dd>${t("stPatientsVal")}</dd></div>
+      <div><dt>${t("stOpen")}</dt><dd>${t("stOpenVal", { c:open.length, m, f:fl })}${q ? ` · <span class="warnt">${t("stQueued", { n:q })}</span>` : ""}</dd></div>
+      <div><dt>${t("stFinished")}</dt><dd><span class="okt">${t("stFinishedVal")}</span></dd></div>
+    </dl></section>
+    <section class="card pad"><h3>${t("demoTitle")}</h3>
+      <div class="conn"><span><span class="dot${S.emrOnline ? "" : " off"}"></span>${t("emrConn")}: ${t(S.emrOnline ? "online" : "offline")}</span>
+      <button type="button" class="btn small" data-act="toggleEmr">${t(S.emrOnline ? "simOff" : "simOn")}</button></div>
+      <div class="conn"><span><span class="dot${S.afterHours ? " warn" : ""}"></span>${t("hoursState")}: ${t(S.afterHours ? "afterHours" : "inHours")}</span>
+      <button type="button" class="btn small" data-act="toggleHours">${t(S.afterHours ? "simDay" : "simAfter")}</button></div>${queue}</section>
+    <section class="card pad"><h3>${t("apiTitle")}</h3>${logs ? `<ol class="api">${logs}</ol>` : `<p class="muted small">${t("apiEmpty")}</p>`}</section>`;
+}
+
+/* ---------- modals ---------- */
+function dialog(title, sub, body, cls){
+  return `<div class="dialog ${cls || ""}" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+    <header class="dlg-head"><div><h2 id="dlg-t">${title}</h2>${sub ? `<p class="muted small">${sub}</p>` : ""}</div>
+    <button type="button" class="icon-btn" data-act="closeModal" aria-label="${t("close")}">${ICON.x}</button></header>
+    <div class="dlg-body">${body}</div></div>`;
+}
+function addModalHTML(m){
+  let body = `<form data-submit="lookup" class="row-form">
+      <label class="fld grow"><span>${t("fileNo")}</span><input id="add-file" data-m="file" inputmode="numeric" autocomplete="off" dir="ltr" value="${esc(m.file)}"></label>
+      <button class="btn" type="submit"${m.busy ? " disabled" : ""}>${m.busy ? `<span class="spin"></span>` : ""}${t("lookup")}</button></form>
+    <p class="muted small">${t("demoFiles")}</p>`;
+  if (m.err) body += `<p class="err">${t(m.err.k, m.err.v)}</p>`;
+  if (m.found){
+    const f = m.found, e = EMR.patients[f], pt = P.patients[f], nm = ptName(f);
+    body += `<div class="emr-box"><div class="emr-tag">${t("fromEmr")}</div><dl class="kv">
+      <div><dt>${t("name")}</dt><dd>${esc(nm)}</dd></div>
+      <div><dt>${t("visitDates")}</dt><dd>${e.visits.map(d => fDate(day(d))).join(S.lang === "ar" ? "، " : ", ")}</dd></div></dl></div>`;
+    if (pt && pt.providers.includes(S.me)){
+      body += `<p class="note">${t("alreadyMine", { name:nm })}</p><div class="actions"><button type="button" class="btn primary" data-act="openFound">${t("openPatient")}</button></div>`;
+    } else if (pt){
+      body += `<p class="note">${t("alreadyOnPlatform", { name:nm })}</p><div class="actions"><button type="button" class="btn primary" data-act="linkPatient">${t("linkPatient")}</button></div>`;
+    } else {
+      body += `<form data-submit="createPatient" class="stack">
+        <label class="fld"><span>${t("mobileLabel")}</span><input id="add-mobile" data-m="mobile" type="tel" dir="ltr" value="${esc(m.mobile)}" autocomplete="off"><small class="muted">${t("mobileHint")}</small></label>
+        ${m.mErr ? `<p class="err">${t("badMobile")}</p>` : ""}
+        <div class="actions"><button class="btn primary" type="submit">${t("createPatient")}</button></div></form>`;
+    }
+  }
+  return dialog(t("addPatientTitle"), t("addPatientSub"), body);
+}
+function finishModalHTML(m){
+  const s = P.sessions.find(x => x.id === m.sid);
+  if (!s) return "";
+  const body = `<p>${t("finishBody", { file:monoRaw(s.file), rec:monoRaw(recName(s.file, s.start)) })}</p>
+    <div class="actions"><button type="button" class="btn" data-act="closeModal">${t("keepChatting")}</button>
+    <button type="button" class="btn primary" data-act="finishGo">${ICON.lock}${t("finishGo")}</button></div>`;
+  return dialog(t("finishQ"), "", body);
+}
+function progressModalHTML(m){
+  const keys = { lock:"stepLock", build:"stepBuild", send:"stepSend", del: m.queued ? "stepDelWait" : "stepDel" };
+  const icon = { done:ICON.check, run:`<span class="spin"></span>`, fail:ICON.alert, wait:`<span class="dot-wait"></span>` };
+  const busy = m.steps.some(s => s.st === "run");
+  const body = `<ol class="steps">${m.steps.map(s => `<li class="step ${s.st}">${icon[s.st]}<span>${t(keys[s.k], s.v)}</span></li>`).join("")}</ol>
+    ${m.queued ? `<p class="note warn">${t("stepFail")}</p>` : ""}
+    ${busy ? "" : `<div class="actions"><button type="button" class="btn primary" data-act="closeModal">${t("done")}</button></div>`}`;
+  return dialog(t("finishChat"), `<span class="mono">${esc(m.rec)}</span>`, body);
+}
+function deactModalHTML(m){
+  const p = prov(m.pid);
+  const n = P.sessions.filter(s => s.providerId === p.id && !s.locked).length;
+  const pc = Object.values(P.patients).filter(x => x.providers.includes(p.id)).length;
+  const body = `<p>${t("deactBody", { name:L(p.name), n, p:pc })}</p>
+    <div class="actions"><button type="button" class="btn" data-act="closeModal">${t("cancel")}</button>
+    <button type="button" class="btn danger" data-act="deactGo">${t("deactGo")}</button></div>`;
+  return dialog(t("deactQ", { name:L(p.name) }), "", body);
+}
+function helpModalHTML(){
+  return dialog(t("helpTitle"), "", `<p>${t("helpBody")}</p>${helpNumbersHTML()}<p class="muted small">${t("callHint")}</p>`);
+}
+function findRec(uid){
+  for (const f in EMR.records){ const r = EMR.records[f].find(x => x.uid === uid); if (r) return r; }
+  return null;
+}
+function wmURI(text){
+  const col = getComputedStyle(document.documentElement).getPropertyValue("--wm").trim() || "#7F8C86";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="340" height="170"><text x="170" y="90" text-anchor="middle" transform="rotate(-22 170 85)" fill="${col}" fill-opacity="0.28" font-family="sans-serif" font-size="13">${esc(text)}</text></svg>`;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+function viewerModalHTML(m){
+  const r = findRec(m.uid);
+  if (!r) return "";
+  const viewer = S.role === "patient" ? "patient" : "provider";
+  const viewerName = viewer === "patient" ? ptName(r.file) + " · " + r.file : L(prov(S.me).name);
+  const sub = `${esc(L(prov(r.providerId).name))} · ${esc(ptName(r.file))} · <span class="mono">${esc(r.id)}</span>`;
+  const body = `<p class="lock-note">${ICON.lock}${t("readOnly")}</p>
+    <div class="viewer-body" data-protected>${threadHTML(r, viewer)}
+      <div class="wm" style="background-image:url('${wmURI(viewerName + " · " + fDT(m.openedAt))}')"></div>
+      <div class="away-msg">${t("hiddenAway")}</div></div>`;
+  return dialog(`${fDT(r.start)} – ${fTime(r.end)}`, sub, body, "wide");
+}
+function renderModal(){
+  const m = S.modal, host = $("#modal");
+  if (!m){ host.innerHTML = ""; return; }
+  const html = m.type === "add" ? addModalHTML(m) : m.type === "finish" ? finishModalHTML(m) : m.type === "progress" ? progressModalHTML(m)
+    : m.type === "deact" ? deactModalHTML(m) : m.type === "help" ? helpModalHTML() : viewerModalHTML(m);
+  host.innerHTML = `<div class="scrim" data-act="scrim">${html}</div>`;
+  const th = host.querySelector(".thread"); if (th) th.scrollTop = 0;
+  if (m.needFocus){
+    m.needFocus = false;
+    const el = host.querySelector("input,[data-act='finishGo'],[data-act='deactGo'],.call,.icon-btn");
+    if (el) el.focus();
+  }
+}
+function renderToast(){
+  $("#toast").innerHTML = S.toast ? `<div class="toast ${S.toast.kind || ""}" role="status">${S.toast.html}</div>` : "";
+}
+
+/* ---------- render ---------- */
+function renderMain(){
+  $("#main").innerHTML = S.role === "admin" ? adminHTML() : S.role === "provider" ? providerHTML() : patientHTML();
+  document.querySelectorAll("#main .thread").forEach(el => { el.scrollTop = el.scrollHeight; });
+  if (S.focus){ const el = document.getElementById("draft-" + S.focus); if (el) el.focus({ preventScroll:true }); S.focus = null; }
+}
+function render(){
+  const root = document.documentElement;
+  root.lang = S.lang; root.dir = S.lang === "ar" ? "rtl" : "ltr";
+  $("#rail").setAttribute("aria-label", I18N[S.lang].behind);
+  $("#bar").innerHTML = barHTML();
+  renderMain(); renderRail(); renderModal(); renderToast();
+}
+
+/* ---------- actions ---------- */
+function newSession(f, pid, by){
+  const s = { id:"s"+(++SID), file:f, providerId:pid, start:new Date(), locked:false, msgs:[{ from:"system", by, at:new Date() }] };
+  P.sessions.push(s);
+  if (by === "patient") audit("patient:" + f, "patientStart", { pid });
+  else audit(pid, "startChat", { file:f });
+  return s;
+}
+function keyParts(key){ const [, f, pid] = key.split(":"); return { f, pid }; }
+function patientSession(f, pid){
+  let s = openSess(f, pid);
+  if (!s) s = newSession(f, pid, "patient");
+  return s;
+}
+function afterPatientMessage(s){
+  if (S.afterHours && !s.autoReplied){
+    s.autoReplied = true;
+    s.msgs.push({ from:"system", kind:"afterhours", at:new Date() });
+  }
+}
+function sendMsg(key, role){
+  const text = (S.drafts[key] || "").trim();
+  if (!text) return;
+  const { f, pid } = keyParts(key);
+  let s = role === "patient" ? patientSession(f, pid) : openSess(f, pid);
+  if (!s) return;
+  const m = { from:role, at:new Date(), text };
+  if (role === "patient" && RISK.test(text)){
+    m.risk = true;
+    if (!s.risk){ s.risk = true; audit("system", "risk", { file:f, pid }); }
+  }
+  s.msgs.push(m);
+  if (role === "patient") afterPatientMessage(s);
+  S.drafts[key] = ""; S.focus = key;
+  renderMain(); renderRail();
+}
+function attachFile(key, role, file){
+  if (!/\.(pdf|jpe?g|png|docx|m4a)$/i.test(file.name) || file.size > 10*1048576){ toast(t("badFile"), "bad"); return; }
+  const { f, pid } = keyParts(key);
+  let s = role === "patient" ? patientSession(f, pid) : openSess(f, pid);
+  if (!s) return;
+  s.msgs.push({ from:role, at:new Date(), file:{ name:file.name, size:file.size, url: /^image\//.test(file.type) ? URL.createObjectURL(file) : null } });
+  if (role === "patient") afterPatientMessage(s);
+  renderMain(); renderRail();
+}
+function commit(s, rec){
+  (EMR.records[s.file] = EMR.records[s.file] || []).push({ uid:"r"+(++UID), id:rec, file:s.file, providerId:s.providerId, start:s.start, end:s.end, msgs:s.msgs });
+  P.sessions = P.sessions.filter(x => x !== s);
+}
+async function syncSession(s, who){
+  s.locked = true; s.end = s.end || new Date();
+  const rec = recName(s.file, s.start);
+  try {
+    await emr("POST", `/patients/${s.file}/chat-records`, { k:"retSaved", v:{ rec } }, 201);
+    commit(s, rec);
+    audit(who, "finish", { rec });
+    return true;
+  } catch (e) {
+    if (!S.queue.includes(s.id)) S.queue.push(s.id);
+    audit(who, "queued", { rec });
+    return false;
+  }
+}
+async function doFinish(sid){
+  const s = P.sessions.find(x => x.id === sid);
+  if (!s) return;
+  s.locked = true; s.end = new Date();
+  S.modal = { type:"progress", rec:recName(s.file, s.start), steps:[
+    { k:"lock", st:"done" }, { k:"build", st:"done", v:{ m:countMsgs(s.msgs), f:countFiles(s.msgs) } },
+    { k:"send", st:"run" }, { k:"del", st:"wait" } ] };
+  render();
+  const ok = await syncSession(s, s.providerId);
+  if (ok){ S.modal.steps[2].st = "done"; S.modal.steps[3].st = "done"; }
+  else { S.modal.steps[2].st = "fail"; S.modal.queued = true; }
+  if (S.modal && S.modal.type === "progress") render(); else { renderMain(); renderRail(); }
+}
+async function retryQueue(){
+  for (const sid of S.queue.slice()){
+    const s = P.sessions.find(x => x.id === sid);
+    if (!s){ S.queue = S.queue.filter(x => x !== sid); continue; }
+    const rec = recName(s.file, s.start);
+    try {
+      await emr("POST", `/patients/${s.file}/chat-records`, { k:"retSaved", v:{ rec } }, 201);
+      commit(s, rec);
+      S.queue = S.queue.filter(x => x !== sid);
+      audit("system", "retry", { rec });
+    } catch (e) { break; }
+  }
+  S.past = null;
+  renderMain(); renderRail();
+}
+async function deactivate(pid){
+  const p = prov(pid);
+  const open = P.sessions.filter(s => s.providerId === pid && !s.locked);
+  p.active = false;
+  audit("admin", "deactivate", { pid });
+  S.modal = null; render();
+  for (const s of open){ await syncSession(s, "system"); }
+  renderMain(); renderRail();
+  toast(t("deactDone", { name:L(p.name), n:open.length }));
+}
+async function doLookup(){
+  const m = S.modal;
+  const f = (m.file || "").trim();
+  m.err = null; m.found = null; m.mErr = false;
+  if (!/^\d{3,12}$/.test(f)){ m.err = { k:"notFound", v:{ n:f || "—" } }; renderModal(); return; }
+  m.busy = true; renderModal();
+  const exists = !!EMR.patients[f];
+  try {
+    await emr("GET", `/patients/${f}?fields=name`, { k: exists ? "retNameVisits" : "retNotFound" }, exists ? 200 : 404);
+    if (exists) await emr("GET", `/patients/${f}/visits?fields=date`, { k:"retVisits" });
+    if (S.modal !== m) return;
+    if (exists) m.found = f; else m.err = { k:"notFound", v:{ n:f } };
+  } catch (e) {
+    if (S.modal !== m) return;
+    m.err = { k:"emrDown" };
+  }
+  m.busy = false;
+  renderModal();
+  const mob = document.getElementById("add-mobile"); if (mob) mob.focus();
+}
+function openRecord(uid){
+  const r = findRec(uid);
+  if (!r) return;
+  emr("GET", `/chat-records/${r.id}`, { k:"retRecord" }).then(() => {
+    S.modal = { type:"viewer", uid, openedAt:new Date(), needFocus:true };
+    audit(S.role === "patient" ? "patient:" + S.patient : S.me, "view", { rec:r.id });
+    renderModal();
+  }).catch(() => toast(t("emrDown"), "bad"));
+}
+function selectPatient(f){
+  S.sel = f; S.tab = "current"; S.past = null; S.pvView = "pane";
+  renderMain();
+  emr("GET", `/patients/${f}?fields=name`, { k:"retNameVisits" }).then(() => emr("GET", `/patients/${f}/visits?fields=date`, { k:"retVisits" })).catch(() => {});
+}
+
+const ACT = {
+  role: d => { S.role = d.v; S.past = null; S.modal = null; S.pvView = "list"; S.ptView = "list"; render(); },
+  lang: () => { S.lang = S.lang === "en" ? "ar" : "en"; render(); },
+  selPatient: d => selectPatient(d.v),
+  back: () => { if (S.role === "patient") S.ptView = "list"; else S.pvView = "list"; renderMain(); },
+  ptab: d => { S.tab = d.v; S.past = null; renderMain(); },
+  pttab: d => { S.ptTab = d.v; S.past = null; renderMain(); },
+  ptSel: d => { S.ptSel = d.v; S.ptTab = "current"; S.past = null; S.ptView = "pane"; renderMain(); },
+  reloadPast: () => { S.past = null; renderMain(); },
+  help: () => { S.modal = { type:"help", needFocus:true }; renderModal(); },
+  openAdd: () => { S.modal = { type:"add", file:"", mobile:"", needFocus:true }; renderModal(); },
+  closeModal: () => { if (S.modal && S.modal.type === "progress" && S.modal.steps.some(s => s.st === "run")) return; S.modal = null; renderModal(); renderMain(); },
+  scrim: (d, e, el) => { if (e.target === el) ACT.closeModal(); },
+  openFound: () => { const f = S.modal.found; S.modal = null; renderModal(); selectPatient(f); },
+  linkPatient: () => {
+    const f = S.modal.found;
+    P.patients[f].providers.push(S.me);
+    audit(S.me, "linkPatient", { file:f });
+    S.modal = null; renderModal(); selectPatient(f); renderRail();
+    toast(t("patientLinked", { name:ptName(f) }));
+  },
+  startChat: () => { newSession(S.sel, S.me, "provider"); S.focus = `pv:${S.sel}:${S.me}`; renderMain(); renderRail(); },
+  finish: d => { S.modal = { type:"finish", sid:d.v, needFocus:true }; renderModal(); },
+  finishGo: () => doFinish(S.modal.sid),
+  viewRec: d => openRecord(d.v),
+  askConsent: () => { P.patients[S.sel].consents[S.me] = "pending"; audit(S.me, "ask", { file:S.sel }); renderMain(); },
+  consent: d => { const f = S.patient; P.patients[f].consents[d.pid] = d.ans; audit("patient:" + f, d.ans === "granted" ? "grant" : "deny", { pid:d.pid }); renderMain(); },
+  revoke: d => { const f = S.patient; delete P.patients[f].consents[d.pid]; audit("patient:" + f, "revoke", { pid:d.pid }); renderMain(); },
+  signOut: () => { S.signedIn[S.patient] = false; S.ptView = "list"; renderMain(); },
+  toggleEmr: () => {
+    S.emrOnline = !S.emrOnline; renderRail();
+    if (S.emrOnline && S.queue.length) setTimeout(retryQueue, 700);
+  },
+  toggleHours: () => { S.afterHours = !S.afterHours; renderRail(); renderMain(); },
+  retry: () => retryQueue(),
+  toggleAddProv: () => { S.addProv = !S.addProv; renderMain(); if (S.addProv){ const el = document.getElementById("np-name"); if (el) el.focus(); } },
+  toggleProv: d => {
+    const p = prov(d.v);
+    if (p.active){ S.modal = { type:"deact", pid:p.id, needFocus:true }; renderModal(); return; }
+    p.active = true; audit("admin", "reactivate", { pid:p.id }); render();
+  },
+  deactGo: () => deactivate(S.modal.pid)
+};
+
+const SUBMIT = {
+  send: form => sendMsg(form.dataset.key, form.dataset.role),
+  lookup: () => doLookup(),
+  createPatient: () => {
+    const m = S.modal, f = m.found;
+    const digits = (m.mobile || "").replace(/\D/g, "");
+    if (digits.length < 8){ m.mErr = true; renderModal(); const el = document.getElementById("add-mobile"); if (el) el.focus(); return; }
+    P.patients[f] = { providers:[S.me], status:"invited", invitedBy:S.me, mobile:"•••• " + digits.slice(-4), consents:{} };
+    audit(S.me, "createPatient", { file:f });
+    S.modal = null; renderModal(); selectPatient(f); renderRail();
+    toast(t("patientInvited", { name:ptName(f) }));
+  },
+  addProv: () => {
+    const name = $("#np-name").value.trim(), spec = $("#np-spec").value.trim(), email = $("#np-email").value.trim();
+    if (!name || !spec || !/^\S+@\S+\.\S+$/.test(email)){ $("#np-err").innerHTML = t("fillProvider"); return; }
+    const id = "p" + (P.providers.length + 1);
+    P.providers.push({ id, name, spec, email, active:true });
+    audit("admin", "createProvider", { pid:id });
+    S.addProv = false; renderMain(); renderRail();
+    toast(t("provInvited", { email }));
+  },
+  rules: () => {
+    const r = Number($("#rl-remind").value), a = Number($("#rl-auto").value);
+    if (!Number.isInteger(r) || !Number.isInteger(a) || r < 1 || a > 168 || r >= a){ $("#rl-err").innerHTML = t("rulesErr"); return; }
+    RULES.remindH = r; RULES.autoH = a;
+    RULES.emergency = cleanNum($("#rl-em").value); RULES.crisisLine = cleanNum($("#rl-crisis").value);
+    audit("admin", "rules");
+    renderMain();
+    toast(t("rulesSaved"));
+  },
+  signIn: () => { S.signedIn[S.patient] = true; audit("patient:" + S.patient, "signIn"); renderMain(); },
+  invite: () => {
+    const u = $("#inv-user").value.trim(), p1 = $("#inv-pw").value, p2 = $("#inv-pw2").value, ok = $("#inv-consent").checked;
+    const err = $("#inv-err");
+    if (u.length < 4){ err.innerHTML = t("errUser"); return; }
+    if (p1.length < 8 || p1 !== p2){ err.innerHTML = t("errPw"); return; }
+    if (!ok){ err.innerHTML = t("errConsent"); return; }
+    const pt = P.patients[S.patient];
+    pt.status = "active"; pt.username = u;
+    S.signedIn[S.patient] = true;
+    audit("patient:" + S.patient, "accountCreated");
+    render();
+    toast(t("accountCreated"));
+  }
+};
+
+/* ---------- events ---------- */
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const fn = ACT[el.dataset.act];
+  if (fn) fn(el.dataset, e, el);
+});
+document.addEventListener("submit", e => {
+  e.preventDefault();
+  const fn = SUBMIT[e.target.dataset.submit];
+  if (fn) fn(e.target);
+});
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (el.dataset.draft) S.drafts[el.dataset.draft] = el.value;
+  if (el.dataset.m && S.modal) S.modal[el.dataset.m] = el.value;
+  if (el.dataset.audit === "q"){ S.auditQ = el.value; const list = $("#audit-list"); if (list) list.innerHTML = auditListHTML(); }
+});
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.dataset.pick === "provider"){ S.me = el.value; S.sel = null; S.tab = "current"; S.past = null; S.pvView = "list"; renderMain(); return; }
+  if (el.dataset.pick === "patient"){ S.patient = el.value; S.ptSel = null; S.ptTab = "current"; S.past = null; S.ptView = "list"; renderMain(); return; }
+  if (el.dataset.audit === "who"){ S.auditWho = el.value; const list = $("#audit-list"); if (list) list.innerHTML = auditListHTML(); return; }
+  if (el.dataset.file && el.files && el.files[0]){ attachFile(el.dataset.file, el.dataset.role, el.files[0]); el.value = ""; }
+});
+document.addEventListener("keydown", e => {
+  if (e.target.dataset && e.target.dataset.draft && e.key === "Enter" && !e.shiftKey && !e.isComposing){
+    e.preventDefault(); e.target.form.requestSubmit();
+  }
+  if (e.key === "Escape" && S.modal) ACT.closeModal();
+  if (S.modal && S.modal.type === "viewer" && (e.ctrlKey || e.metaKey) && /^[psc]$/i.test(e.key)) e.preventDefault();
+});
+["copy","cut","contextmenu","dragstart"].forEach(type => document.addEventListener(type, e => {
+  if (e.target.closest && e.target.closest("[data-protected]")) e.preventDefault();
+}));
+window.addEventListener("blur", () => document.body.classList.add("away"));
+window.addEventListener("focus", () => document.body.classList.remove("away"));
+document.addEventListener("visibilitychange", () => document.body.classList.toggle("away", document.hidden));
+
+setInterval(() => {
+  document.querySelectorAll(".countdown").forEach(el => {
+    const s = P.sessions.find(x => x.id === el.dataset.sid);
+    if (s) el.innerHTML = countdownText(s);
+  });
+}, 30000);
+
+render();
+})();
+</script>
