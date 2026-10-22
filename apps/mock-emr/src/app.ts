@@ -21,7 +21,7 @@ export function buildMockEmr(opts: MockEmrOptions) {
   const tokens = new Set<string>();
   const records: StoredRecord[] = seedRecords();
   const byIdempotencyKey = new Map<string, StoredRecord>();
-  const state = { outage: false };
+  const state = { outage: false, rejectSaves: false };
 
   const summary = (r: StoredRecord) => ({
     recordId: r.recordId,
@@ -101,6 +101,8 @@ export function buildMockEmr(opts: MockEmrOptions) {
     if (!patients[req.params.file]) return reply.code(404).send({ code: "not_found", message: "No patient with that file number" });
 
     const { record, attachmentContents } = req.body ?? ({} as SaveBody);
+    // Simulated refusal. Like some real APIs, it quotes part of the record back in the error.
+    if (state.rejectSaves) return reply.code(400).send({ code: "invalid_record", message: `Rejected record: ${JSON.stringify(record?.messages ?? []).slice(0, 300)}` });
     if (!record?.recordName || !Array.isArray(record.messages) || record.fileNumber !== req.params.file) {
       return reply.code(400).send({ code: "invalid_record", message: "Record is missing fields or has the wrong file number" });
     }
@@ -124,6 +126,12 @@ export function buildMockEmr(opts: MockEmrOptions) {
   app.post<{ Body: { on: boolean } }>("/__mock/outage", async req => {
     state.outage = !!req.body?.on;
     return { outage: state.outage };
+  });
+
+  // Test-only switch: R5 refuses every record with a 400.
+  app.post<{ Body: { on: boolean } }>("/__mock/reject", async req => {
+    state.rejectSaves = !!req.body?.on;
+    return { rejectSaves: state.rejectSaves };
   });
 
   return { app, records, state };

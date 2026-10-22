@@ -9,6 +9,7 @@ type ProviderRow = {
   emrStaffId: string | null; active: boolean; mfaEnabled: boolean; hasPassword: boolean; patients: number; openChats: number;
 };
 type Rules = { remindHours: number; autoFinishHours: number; emergencyNumber: string; crisisLineNumber: string; workingHours: { days: number[]; start: string; end: string } };
+type QueueRow = { id: string; recordName: string; finishedBy: string | null; endedAt: string | null; attempts: number; nextAttemptAt: string | null; lastError: string | null };
 type AuditRow = { id: number; at: string; actorType: "admin" | "provider" | "patient" | "system"; actorId: string | null; actorName: string | null; action: string; target: string | null; targetName: string | null };
 
 const ACTIONS: Record<string, { en: string; ar: string }> = {
@@ -26,6 +27,9 @@ const ACTIONS: Record<string, { en: string; ar: string }> = {
   chat_finished: { en: "Finished a chat", ar: "إنهاء محادثة" },
   chat_saved_to_emr: { en: "Chat saved to the EMR and deleted from the platform", ar: "حفظ المحادثة في السجل الطبي وحذفها من المنصة" },
   chat_sync_queued: { en: "EMR didn't respond; chat queued", ar: "لم يستجب السجل الطبي؛ وُضعت المحادثة في الانتظار" },
+  chat_sync_rejected: { en: "EMR refused a chat; it stays locked", ar: "رفض السجل الطبي محادثة؛ تبقى مقفلة" },
+  chat_sync_alert: { en: "Told the admins a chat hasn't reached the EMR", ar: "تنبيه المشرفين بأن محادثة لم تصل إلى السجل الطبي" },
+  chat_sync_retry_requested: { en: "Asked to send a waiting chat again", ar: "طلب إعادة إرسال محادثة بالانتظار" },
   risk_words_flagged: { en: "Flagged risk words in a chat", ar: "رصد كلمات خطر في محادثة" },
   consent_requested: { en: "Asked for access to chats with other providers", ar: "طلب إذن قراءة المحادثات مع مقدمي رعاية آخرين" },
   consent_granted: { en: "Allowed access to chats with other providers", ar: "السماح بقراءة المحادثات مع مقدمي رعاية آخرين" },
@@ -96,12 +100,60 @@ function Overview() {
           </tbody>
         </table>
       </div>
+      <SyncQueue version={version} />
       <div className="admin-grid">
         <RulesForm />
         <AuditLog version={version} />
       </div>
       {deact && <DeactivateDialog p={deact} name={name(deact)} onClose={() => setDeact(null)} onDone={() => { setDeact(null); setVersion(v => v + 1); }} />}
     </>
+  );
+}
+
+function SyncQueue({ version }: { version: number }) {
+  const { t, fDT, errText } = useI18n();
+  const toast = useToast();
+  const [mine, setMine] = useState(0);
+  const rows = useAsync(() => api<QueueRow[]>("GET", "/api/admin/sync-queue"), [version, mine]);
+  // lastError is a short code from the server: "emr_unavailable", or "rejected_<status>_<EMR code>".
+  const state = (r: QueueRow) => {
+    const refused = r.lastError?.match(/^rejected_(\d+)_(.+)$/);
+    if (refused) return <><span className="pill danger">{t("syncRefused")}</span> <span className="mono small">{refused[1]} {refused[2]}</span></>;
+    if (r.lastError === "emr_unavailable") return <span className="pill warn">{t("syncWaiting")}</span>;
+    if (r.lastError) return <span className="pill warn">{t("syncFailed")}</span>;
+    return <span className="pill">{t("syncSending")}</span>;
+  };
+  const anyRefused = (rows.data ?? []).some(r => r.lastError?.startsWith("rejected_"));
+  return (
+    <section className="card pad" style={{ marginTop: 16 }}>
+      <h2>{t("syncTitle")}</h2>
+      <p className="muted small">{t("syncSub")}</p>
+      {rows.error ? <p className="err">{errText(rows.error)}</p> : null}
+      {rows.data && !rows.data.length && <p className="muted">{t("syncNone")}</p>}
+      {!!rows.data?.length && (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>{t("colRecord")}</th><th>{t("colFinished")}</th><th>{t("colAttempts")}</th><th>{t("colStatus")}</th><th>{t("colNext")}</th><th><span className="vh">{t("retryNow")}</span></th></tr></thead>
+            <tbody>
+              {rows.data.map(r => (
+                <tr key={r.id}>
+                  <td><span className="mono">{r.recordName}</span></td>
+                  <td>{r.endedAt ? fDT(r.endedAt) : ""}</td>
+                  <td>{r.attempts}</td>
+                  <td>{state(r)}</td>
+                  <td>{r.nextAttemptAt ? fDT(r.nextAttemptAt) : ""}</td>
+                  <td><button className="btn small" onClick={async () => {
+                    try { await api("POST", `/api/admin/sync-queue/${r.id}/retry`); toast(t("retryQueued", { rec: r.recordName })); setMine(v => v + 1); }
+                    catch (e) { toast(errText(e), true); }
+                  }}>{t("retryNow")}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {anyRefused && <p className="note warn">{t("syncRefusedHelp")}</p>}
+    </section>
   );
 }
 

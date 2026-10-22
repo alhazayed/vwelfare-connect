@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { authenticator } from "otplib";
-import { attachments, chatSessions, messages } from "../src/db/schema.ts";
+import { attachments, auditLog, chatSessions, messages } from "../src/db/schema.ts";
 import { addMessage, finishSession, workerTick } from "../src/services/chat.ts";
 import { Client, inviteToken, PASSWORD, setup } from "./helpers.ts";
 
@@ -194,6 +194,80 @@ describe("chat lifecycle", () => {
     expect(view.messages.map((m: any) => m.kind)).toContain("afterhours");
     expect((await sara.ok("GET", "/api/provider/patients")).find((p: any) => p.fileNumber === "10633").risk).toBe(true);
     expect(env.notifier.sent.some(s => s.channel === "email" && s.to === "sara@vwelfare.test" && !s.text.includes("hurt"))).toBe(true);
+  });
+});
+
+describe("EMR failures", () => {
+  const adminEmails = () => env.notifier.sent.filter(s => s.channel === "email" && s.to === "admin@vwelfare.test");
+  const minutes = (n: number) => { env.clock.now = new Date(env.clock.now.getTime() + n * 60_000); };
+
+  it("keeps a refused chat locked, stores no EMR error text, tells the admin once and retries on request", async () => {
+    await env.createStaff("admin", "admin@vwelfare.test");
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    const patient = await onboardPatient(sara, "10633", "mariam.s");
+    const pid = (await patient.ok("GET", "/api/patient/me")).team[0].id;
+    await patient.ok("POST", `/api/patient/providers/${pid}/chat/messages`, { text: "My private worry" });
+
+    env.emr.state.rejectSaves = true;
+    expect((await sara.ok("POST", "/api/provider/patients/10633/chat/finish")).status).toBe("queued");
+    const [row] = await env.deps.db.select().from(chatSessions);
+    expect(row!.status).toBe("locked");
+    expect(row!.lastError).toBe("rejected_400_invalid_record");
+    // The mock EMR quotes the record in its error; none of it may be kept.
+    const audits = await env.deps.db.select().from(auditLog);
+    expect(JSON.stringify(audits)).not.toContain("worry");
+    expect(audits.map(a => a.action)).toContain("chat_sync_rejected");
+    expect(adminEmails()).toHaveLength(1);
+    expect(adminEmails()[0]!.text).not.toMatch(/10633|Mariam|Sara/);
+
+    // Not retried every 30 minutes, and no second email.
+    minutes(60);
+    await workerTick(env.deps);
+    expect((await env.deps.db.select().from(chatSessions))[0]!.syncAttempts).toBe(1);
+    expect(adminEmails()).toHaveLength(1);
+
+    const admin = await env.staffClient("admin@vwelfare.test");
+    const queue = await admin.ok("GET", "/api/admin/sync-queue");
+    expect(queue).toMatchObject([{ recordName: "10633_2026-10-21_09-00", attempts: 1, lastError: "rejected_400_invalid_record" }]);
+
+    // Once the vendor has fixed it, the admin sends it again without waiting.
+    env.emr.state.rejectSaves = false;
+    await admin.ok("POST", `/api/admin/sync-queue/${queue[0].id}/retry`);
+    expect((await admin.req("POST", `/api/admin/sync-queue/${queue[0].id}/retry`)).statusCode).toBe(409); // already due
+    await workerTick(env.deps);
+    expect(await env.deps.db.select().from(chatSessions)).toHaveLength(0);
+    expect(env.emr.records.filter(r => r.fileNumber === "10633")).toHaveLength(1);
+    expect(await admin.ok("GET", "/api/admin/sync-queue")).toEqual([]);
+    expect((await admin.req("POST", `/api/admin/sync-queue/${queue[0].id}/retry`)).statusCode).toBe(404);
+    expect((await (await env.staffClient("sara@vwelfare.test")).req("GET", "/api/admin/sync-queue")).statusCode).toBe(403);
+  });
+
+  it("tells the admin once when a finished chat has waited for the EMR for over an hour", async () => {
+    await env.createStaff("admin", "admin@vwelfare.test");
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    const patient = await onboardPatient(sara, "10790", "khaled.i");
+    const pid = (await patient.ok("GET", "/api/patient/me")).team[0].id;
+    await patient.ok("POST", `/api/patient/providers/${pid}/chat/messages`, { text: "Hello" });
+
+    env.emr.state.outage = true;
+    await sara.ok("POST", "/api/provider/patients/10790/chat/finish");
+    expect((await env.deps.db.select().from(chatSessions))[0]!.lastError).toBe("emr_unavailable");
+    minutes(30);
+    await workerTick(env.deps);
+    expect(adminEmails()).toHaveLength(0);
+    minutes(31);
+    await workerTick(env.deps);
+    expect(adminEmails()).toHaveLength(1);
+    minutes(60);
+    await workerTick(env.deps);
+    expect(adminEmails()).toHaveLength(1);
+
+    env.emr.state.outage = false;
+    minutes(30);
+    await workerTick(env.deps);
+    expect(await env.deps.db.select().from(chatSessions)).toHaveLength(0);
   });
 });
 

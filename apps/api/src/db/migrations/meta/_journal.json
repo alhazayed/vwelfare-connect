@@ -15,6 +15,13 @@
       "when": 1792580161364,
       "tag": "0001_secrets_vault",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792675627778,
+      "tag": "0002_sync_alerts",
+      "breakpoints": true
     }
   ]
 }

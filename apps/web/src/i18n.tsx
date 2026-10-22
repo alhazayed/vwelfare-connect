@@ -76,6 +76,12 @@ const en = {
   auditTitle: "Audit log", auditSub: "Who did what, and when. Message content never appears here.",
   auditSearch: "Search by name, file number or record", whoAll: "Everyone", whoAdmin: "Super admin", whoProviders: "Providers", whoPatients: "Patients", whoPlatform: "Platform",
   auditNone: "No entries match.", patientN: "Patient {n}",
+  syncTitle: "Chats waiting for the EMR", syncSub: "Finished chats stay locked here until the EMR confirms it saved them. Only record names are shown.",
+  syncNone: "No chats are waiting. Every finished chat has been saved to the EMR.",
+  colRecord: "Record", colFinished: "Finished", colAttempts: "Attempts", colNext: "Next try",
+  syncSending: "Sending", syncWaiting: "EMR not responding", syncRefused: "EMR refused it", syncFailed: "Couldn't send",
+  syncRefusedHelp: "When the EMR refuses a chat, it is tried again every 6 hours. Ask the EMR vendor why, then use Try again now.",
+  retryNow: "Try again now", retryQueued: "{rec} will be sent again within a few seconds.",
   days: "Sun,Mon,Tue,Wed,Thu,Fri,Sat",
   // errors by code
   err_bad_credentials: "The sign-in details are incorrect.", err_locked: "Too many attempts. Try again in 15 minutes.",
@@ -84,6 +90,7 @@ const en = {
   err_username_taken: "That username is taken. Choose another.", err_invitation_invalid: "This invitation link has expired or was already used. Ask the center for a new one.",
   err_email_taken: "A provider with this email already exists.", err_bad_mobile: "Enter a mobile number with at least 8 digits.",
   err_FST_REQ_FILE_TOO_LARGE: "This file is larger than 10 MB.", err_generic: "Something went wrong. Try again.",
+  err_retry_soon: "This chat is being sent now or will be tried again within 2 minutes.",
   kb: "KB", mb: "MB", hm: "{h}h {m}m"
 };
 
@@ -160,6 +167,12 @@ const ar: Record<Key, string> = {
   auditTitle: "سجل التدقيق", auditSub: "من فعل ماذا ومتى. لا يظهر محتوى الرسائل هنا أبداً.",
   auditSearch: "ابحث بالاسم أو رقم الملف أو السجل", whoAll: "الجميع", whoAdmin: "المشرف العام", whoProviders: "مقدمو الرعاية", whoPatients: "المرضى", whoPlatform: "المنصة",
   auditNone: "لا توجد نتائج مطابقة.", patientN: "المريض {n}",
+  syncTitle: "محادثات بانتظار السجل الطبي", syncSub: "تبقى المحادثات المنتهية مقفلة هنا حتى يؤكد السجل الطبي حفظها. تظهر أسماء السجلات فقط.",
+  syncNone: "لا توجد محادثات بالانتظار. حُفظت كل المحادثات المنتهية في السجل الطبي.",
+  colRecord: "السجل", colFinished: "انتهت", colAttempts: "المحاولات", colNext: "المحاولة التالية",
+  syncSending: "جارٍ الإرسال", syncWaiting: "السجل الطبي لا يستجيب", syncRefused: "رفضها السجل الطبي", syncFailed: "تعذّر الإرسال",
+  syncRefusedHelp: "عندما يرفض السجل الطبي محادثة، تُعاد المحاولة كل 6 ساعات. يُرجى سؤال مزوّد السجل الطبي عن السبب، ثم استخدام «إعادة المحاولة الآن».",
+  retryNow: "إعادة المحاولة الآن", retryQueued: "سيُعاد إرسال {rec} خلال ثوانٍ.",
   days: "الأحد,الاثنين,الثلاثاء,الأربعاء,الخميس,الجمعة,السبت",
   err_bad_credentials: "بيانات الدخول غير صحيحة.", err_locked: "محاولات كثيرة. حاول مرة أخرى بعد 15 دقيقة.",
   err_bad_code: "الرمز غير مطابق. تحقق من تطبيق المصادقة وحاول مرة أخرى.", err_emr_unavailable: "السجل الطبي لا يستجيب حالياً. حاول مرة أخرى بعد قليل.",
@@ -167,6 +180,7 @@ const ar: Record<Key, string> = {
   err_username_taken: "اسم المستخدم مستخدم. اختر اسماً آخر.", err_invitation_invalid: "انتهت صلاحية رابط الدعوة أو استُخدم من قبل. اطلب رابطاً جديداً من المركز.",
   err_email_taken: "يوجد مقدم رعاية بهذا البريد بالفعل.", err_bad_mobile: "أدخل رقم جوال من 8 أرقام على الأقل.",
   err_FST_REQ_FILE_TOO_LARGE: "حجم الملف أكبر من 10 ميجابايت.", err_generic: "حدث خطأ. حاول مرة أخرى.",
+  err_retry_soon: "يجري إرسال هذه المحادثة الآن أو ستُعاد المحاولة خلال دقيقتين.",
   kb: "ك.ب", mb: "م.ب", hm: "{h} س {m} د"
 };
 

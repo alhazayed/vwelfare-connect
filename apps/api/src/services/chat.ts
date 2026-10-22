@@ -6,7 +6,7 @@ import { baseRecordName, isoLocal, isWithinWorkingHours } from "../lib/time.ts";
 import { hasRiskWords } from "../lib/risk.ts";
 import { sha256 } from "../lib/crypto.ts";
 import { patientKey, staffKey } from "../realtime.ts";
-import type { EmrRecord } from "../emr/client.ts";
+import { EmrRejected, EmrUnavailable, type EmrRecord } from "../emr/client.ts";
 import { audit, type Actor } from "./audit.ts";
 import { getRules } from "./rules.ts";
 
@@ -14,6 +14,10 @@ export type SessionRow = typeof chatSessions.$inferSelect;
 type FinishedBy = "provider" | "auto" | "deactivation";
 
 const BACKOFF_SECONDS = [30, 120, 600, 1800];
+// A chat the EMR refused is tried again only every 6 hours: the admins are told and someone has to look at it.
+const REJECTED_RETRY_SECONDS = 6 * 3600;
+// The specification asks for an alert when a finished chat has waited for the EMR longer than this.
+const QUEUE_ALERT_MS = 3600_000;
 export const MAX_TEXT = 4000;
 const AUTO_REPLY_EN = "Outside working hours. Your message will be read on the next working day. In an emergency, use Need urgent help.";
 
@@ -120,7 +124,7 @@ export async function sessionView(deps: Deps, s: SessionRow) {
 }
 
 // While one caller is sending a chat to the EMR, the worker leaves it alone for this long.
-const LEASE_MS = 2 * 60_000;
+export const LEASE_MS = 2 * 60_000;
 
 export async function finishSession(deps: Deps, s: SessionRow, finishedBy: FinishedBy, actor: Actor): Promise<{ status: "saved" | "queued"; recordName: string }> {
   const now = deps.now();
@@ -183,15 +187,33 @@ export async function syncSession(deps: Deps, sessionId: string): Promise<{ stat
     return { status: "saved", recordName: s.recordName };
   } catch (e) {
     const attempts = s.syncAttempts + 1;
-    const delay = BACKOFF_SECONDS[Math.min(attempts - 1, BACKOFF_SECONDS.length - 1)]!;
+    const rejected = e instanceof EmrRejected;
+    const reason = rejected ? `rejected_${e.status}_${e.code}` : e instanceof EmrUnavailable ? "emr_unavailable" : "sync_failed";
+    const delay = rejected ? REJECTED_RETRY_SECONDS : BACKOFF_SECONDS[Math.min(attempts - 1, BACKOFF_SECONDS.length - 1)]!;
     await deps.db.update(chatSessions).set({
       syncAttempts: attempts,
       nextAttemptAt: new Date(deps.now().getTime() + delay * 1000),
-      lastError: (e as Error).message.slice(0, 500)
+      lastError: reason
     }).where(eq(chatSessions.id, s.id));
-    if (attempts === 1) await audit(deps, { type: "system" }, "chat_sync_queued", s.recordName, { reason: (e as Error).message.slice(0, 200) });
+    if (attempts === 1) await audit(deps, { type: "system" }, "chat_sync_queued", s.recordName, { reason });
+    if (rejected && s.lastError !== reason) await audit(deps, { type: "system" }, "chat_sync_rejected", s.recordName, { reason });
+    if (rejected) await alertAdmins(deps, s.id, s.recordName, reason);
     return { status: "queued", recordName: s.recordName };
   }
+}
+
+/** Tells the admins, once per chat, that a finished chat isn't reaching the EMR. The email names no patient or chat. */
+async function alertAdmins(deps: Deps, sessionId: string, recordName: string, reason: string) {
+  const claimed = await deps.db.update(chatSessions).set({ alertedAt: deps.now() })
+    .where(and(eq(chatSessions.id, sessionId), isNull(chatSessions.alertedAt)))
+    .returning({ id: chatSessions.id });
+  if (!claimed.length) return;
+  const admins = await deps.db.select({ email: staff.email }).from(staff).where(and(eq(staff.role, "admin"), eq(staff.active, true)));
+  for (const a of admins) {
+    await deps.notifier.email(a.email, "A finished chat hasn't reached the EMR",
+      "A finished chat in Vwelfare Connect hasn't been saved to the EMR yet. It stays locked and safe on the platform. Sign in and check \"Chats waiting for the EMR\" on the admin overview.");
+  }
+  await audit(deps, { type: "system" }, "chat_sync_alert", recordName, { reason });
 }
 
 /** Runs every few seconds: reminders, automatic finishes, and retries of queued chats. */
@@ -211,6 +233,10 @@ export async function workerTick(deps: Deps) {
     if (p) await deps.notifier.email(p.email, "An open chat is waiting", `You have an open chat in Vwelfare Connect. It will finish automatically after ${rules.autoFinishHours} hours with no new messages.`);
     await deps.db.update(chatSessions).set({ remindedAt: now }).where(eq(chatSessions.id, s.id));
   }
+
+  const waiting = await deps.db.select({ id: chatSessions.id, recordName: chatSessions.recordName, lastError: chatSessions.lastError }).from(chatSessions)
+    .where(and(eq(chatSessions.status, "locked"), isNull(chatSessions.alertedAt), lt(chatSessions.endedAt, new Date(now.getTime() - QUEUE_ALERT_MS))));
+  for (const s of waiting) await alertAdmins(deps, s.id, s.recordName, s.lastError ?? "waiting");
 
   // Claim each due chat (take the lease) before sending, so two workers or a worker and a request never send it together.
   const due = await deps.db.update(chatSessions)

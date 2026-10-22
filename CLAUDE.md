@@ -32,7 +32,7 @@ npm workspaces, TypeScript everywhere, ES modules with explicit `.ts`/`.tsx` imp
   - `src/routes/*` — one file per area (auth, admin, provider, patient, secrets). `src/db/schema.ts` is everything the platform stores.
   - `test/` — end-to-end tests through `app.inject`; `helpers.ts` builds an app with a fake clock (`env.clock.now`).
 - `apps/web` — React 19 + Vite. `src/i18n.tsx` holds the English and Arabic text; `src/styles.css` carries the prototype's design tokens; pages in `src/pages`.
-- `apps/mock-emr` — stand-in for the vendor's API, in memory, with sample patients. `POST /__mock/outage` simulates the EMR being down.
+- `apps/mock-emr` — stand-in for the vendor's API, in memory, with sample patients. `POST /__mock/outage` simulates the EMR being down; `POST /__mock/reject` makes it refuse every saved chat.
 
 ## Rules that must not break
 

@@ -30,6 +30,20 @@ export type EmrRecord = {
 
 export class EmrUnavailable extends Error {}
 
+/**
+ * The EMR answered but refused the record (a 4xx other than sign-in or rate-limit problems). Sending the same
+ * record again won't help until someone looks at it. Only the status and the EMR's short error code are kept:
+ * the response body may quote the record, so it is never stored or logged.
+ */
+export class EmrRejected extends Error {
+  constructor(public status: number, public code: string) {
+    super(`EMR rejected the chat record (${status} ${code})`);
+  }
+}
+
+// Worth retrying as they are: credentials being rotated, a timeout or a rate limit.
+const RETRYABLE_4XX = new Set([401, 403, 408, 429]);
+
 export type EmrCredentials = { baseUrl: string; clientId: string; clientSecret: string };
 
 export class EmrClient {
@@ -132,7 +146,9 @@ export class EmrClient {
       body: JSON.stringify({ record, attachmentContents: contents.map(c => ({ id: c.id, contentBase64: c.content.toString("base64") })) })
     });
     if (res.status === 200 || res.status === 201) return res.json() as Promise<{ recordId: string }>;
-    const detail = await res.text().catch(() => "");
-    throw new Error(`EMR rejected the chat record (${res.status}): ${detail.slice(0, 300)}`);
+    if (RETRYABLE_4XX.has(res.status)) throw new EmrUnavailable(`EMR responded ${res.status}`);
+    const body = await res.json().catch(() => null) as { code?: unknown } | null;
+    const code = typeof body?.code === "string" && /^[A-Za-z0-9_.-]{1,40}$/.test(body.code) ? body.code : "unknown";
+    throw new EmrRejected(res.status, code);
   }
 }
