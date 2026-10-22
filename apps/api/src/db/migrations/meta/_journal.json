@@ -22,6 +22,13 @@
       "when": 1792675627778,
       "tag": "0002_sync_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792677186189,
+      "tag": "0003_staff_mfa_last_step",
+      "breakpoints": true
     }
   ]
 }

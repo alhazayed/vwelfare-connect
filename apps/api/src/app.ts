@@ -20,7 +20,7 @@ import { patientRoutes } from "./routes/patient.ts";
 export async function buildApp(deps: Deps, opts: { logger?: boolean } = {}) {
   const app = Fastify({
     logger: opts.logger ? { redact: ["req.headers.cookie", "req.headers.authorization"] } : false,
-    trustProxy: true
+    trustProxy: deps.config.TRUST_PROXY
   });
 
   await app.register(cookie);

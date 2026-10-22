@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { authenticator } from "otplib";
+import { eq } from "drizzle-orm";
 import { buildMockEmr } from "@vwelfare/mock-emr/src/app.ts";
 import { buildApp } from "../src/app.ts";
 import { loadConfig } from "../src/config.ts";
@@ -58,6 +59,9 @@ export async function setup() {
   }
 
   async function staffClient(email: string) {
+    // Each authenticator code works once. Tests sign the same person in several times within one 30-second step,
+    // so forget the last accepted step first (the reuse check itself is tested in signin.test.ts).
+    await db.update(staff).set({ mfaLastStep: null }).where(eq(staff.email, email));
     const c = new Client(app);
     await c.ok("POST", "/api/auth/staff/login", { email, password: PASSWORD });
     await c.ok("POST", "/api/auth/staff/mfa", { code: authenticator.generate(mfaSecrets.get(email)!) });

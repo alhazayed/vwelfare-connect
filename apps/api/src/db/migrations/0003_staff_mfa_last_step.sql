@@ -1,0 +1,1 @@
+ALTER TABLE "staff" ADD COLUMN "mfa_last_step" integer;
