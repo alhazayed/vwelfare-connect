@@ -6,7 +6,7 @@ import { HttpError, type Deps } from "../deps.ts";
 import { requirePatient } from "../auth.ts";
 import { audit } from "../services/audit.ts";
 import { getRules } from "../services/rules.ts";
-import { addMessage, findSession, sessionView, startSession } from "../services/chat.ts";
+import { addMessage, findSession, sessionView, startSession, type NewContent } from "../services/chat.ts";
 import { isWithinWorkingHours } from "../lib/time.ts";
 import { staffKey } from "../realtime.ts";
 import { readUpload, recordView, sendProtectedFile } from "./util.ts";
@@ -61,20 +61,30 @@ export function patientRoutes(app: FastifyInstance, deps: Deps) {
     return (await findSession(deps, file, pid, "open")) ?? startSession(deps, file, pid, "patient", actor(file, ip));
   }
 
+  /** Patients can always write: if the chat was finished a moment ago, the message starts a new one. */
+  async function send(file: string, pid: string, ip: string, content: NewContent) {
+    const s = await openOrStart(file, pid, ip);
+    try {
+      await addMessage(deps, s, "patient", content);
+      return s;
+    } catch (e) {
+      if (!(e instanceof HttpError && e.code === "chat_locked")) throw e;
+      const fresh = await openOrStart(file, pid, ip);
+      await addMessage(deps, fresh, "patient", content);
+      return fresh;
+    }
+  }
+
   app.post<{ Params: { pid: string } }>("/api/patient/providers/:pid/chat/messages", async req => {
     const me = requirePatient(req);
     const { text } = z.object({ text: z.string().trim().min(1).max(4000) }).parse(req.body);
-    const s = await openOrStart(me.fileNumber, req.params.pid, req.ip);
-    await addMessage(deps, s, "patient", { text });
-    return sessionView(deps, s);
+    return sessionView(deps, await send(me.fileNumber, req.params.pid, req.ip, { text }));
   });
 
   app.post<{ Params: { pid: string } }>("/api/patient/providers/:pid/chat/files", async req => {
     const me = requirePatient(req);
     const file = await readUpload(deps, req);
-    const s = await openOrStart(me.fileNumber, req.params.pid, req.ip);
-    await addMessage(deps, s, "patient", { file });
-    return sessionView(deps, s);
+    return sessionView(deps, await send(me.fileNumber, req.params.pid, req.ip, { file }));
   });
 
   app.get<{ Params: { pid: string } }>("/api/patient/providers/:pid/records", async req => {

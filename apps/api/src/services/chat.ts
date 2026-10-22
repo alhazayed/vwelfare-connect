@@ -47,36 +47,45 @@ export type NewContent = { text: string } | { file: { name: string; mimeType: st
 export async function addMessage(deps: Deps, s: SessionRow, sender: "patient" | "provider", content: NewContent) {
   if (s.status !== "open") throw new HttpError(409, "chat_locked", "This chat is finished");
   const now = deps.now();
-  let attachmentRow: { id: string; storageKey: string } | null = null;
-  if ("file" in content) {
-    const storageKey = await deps.files.put(content.file.content);
-    const [a] = await deps.db.insert(attachments).values({
-      sessionId: s.id, fileName: content.file.name, mimeType: content.file.mimeType, sizeBytes: content.file.content.length,
-      sha256: sha256(content.file.content), storageKey, createdAt: now
-    }).returning();
-    attachmentRow = { id: a!.id, storageKey };
-  }
+  const storageKey = "file" in content ? await deps.files.put(content.file.content) : null;
   const text = "text" in content ? content.text.trim().slice(0, MAX_TEXT) : null;
   const risk = sender === "patient" && !!text && hasRiskWords(text);
 
   const rules = await getRules(deps);
   const afterHours = sender === "patient" && !s.autoReplied && !isWithinWorkingHours(now, rules.workingHours, deps.config.CENTER_TIMEZONE);
 
-  await deps.db.transaction(async tx => {
-    const [row] = await tx.select({ m: max(messages.seq) }).from(messages).where(eq(messages.sessionId, s.id));
-    let seq = (row?.m ?? 0) + 1;
-    await tx.insert(messages).values({
-      sessionId: s.id, seq: seq++, sender, kind: attachmentRow ? "file" : "text",
-      textEnc: text ? deps.cipher.encrypt(text) : null, attachmentId: attachmentRow?.id ?? null, risk, sentAt: now
+  try {
+    await deps.db.transaction(async tx => {
+      // `s` may have been read before the chat was finished. Lock the row and check again: finishing waits for this
+      // insert, or this insert sees the chat locked. Otherwise the message would be deleted without reaching the EMR.
+      const [cur] = await tx.select({ status: chatSessions.status }).from(chatSessions).where(eq(chatSessions.id, s.id)).for("update");
+      if (cur?.status !== "open") throw new HttpError(409, "chat_locked", "This chat is finished");
+      let attachmentId: string | null = null;
+      if ("file" in content) {
+        const [a] = await tx.insert(attachments).values({
+          sessionId: s.id, fileName: content.file.name, mimeType: content.file.mimeType, sizeBytes: content.file.content.length,
+          sha256: sha256(content.file.content), storageKey: storageKey!, createdAt: now
+        }).returning();
+        attachmentId = a!.id;
+      }
+      const [row] = await tx.select({ m: max(messages.seq) }).from(messages).where(eq(messages.sessionId, s.id));
+      let seq = (row?.m ?? 0) + 1;
+      await tx.insert(messages).values({
+        sessionId: s.id, seq: seq++, sender, kind: attachmentId ? "file" : "text",
+        textEnc: text ? deps.cipher.encrypt(text) : null, attachmentId, risk, sentAt: now
+      });
+      if (afterHours) await tx.insert(messages).values({ sessionId: s.id, seq: seq++, sender: "system", kind: "afterhours", sentAt: now });
+      await tx.update(chatSessions).set({
+        lastMessageAt: now,
+        remindedAt: null,
+        ...(risk ? { risk: true } : {}),
+        ...(afterHours ? { autoReplied: true } : {})
+      }).where(eq(chatSessions.id, s.id));
     });
-    if (afterHours) await tx.insert(messages).values({ sessionId: s.id, seq: seq++, sender: "system", kind: "afterhours", sentAt: now });
-    await tx.update(chatSessions).set({
-      lastMessageAt: now,
-      remindedAt: null,
-      ...(risk ? { risk: true } : {}),
-      ...(afterHours ? { autoReplied: true } : {})
-    }).where(eq(chatSessions.id, s.id));
-  });
+  } catch (e) {
+    if (storageKey) await deps.files.delete(storageKey);
+    throw e;
+  }
 
   if (risk && !s.risk) {
     await audit(deps, { type: "system" }, "risk_words_flagged", s.fileNumber, { providerId: s.providerId });
@@ -113,15 +122,22 @@ export async function sessionView(deps: Deps, s: SessionRow) {
 // While one caller is sending a chat to the EMR, the worker leaves it alone for this long.
 const LEASE_MS = 2 * 60_000;
 
-export async function finishSession(deps: Deps, s: SessionRow, finishedBy: FinishedBy, actor: Actor) {
+export async function finishSession(deps: Deps, s: SessionRow, finishedBy: FinishedBy, actor: Actor): Promise<{ status: "saved" | "queued"; recordName: string }> {
   const now = deps.now();
   // Locking also takes the lease, so the background worker doesn't send the same chat at the same time.
-  await deps.db.update(chatSessions)
+  const locked = await deps.db.update(chatSessions)
     .set({ status: "locked", endedAt: now, finishedBy, nextAttemptAt: new Date(now.getTime() + LEASE_MS) })
-    .where(and(eq(chatSessions.id, s.id), eq(chatSessions.status, "open")));
+    .where(and(eq(chatSessions.id, s.id), eq(chatSessions.status, "open")))
+    .returning({ id: chatSessions.id });
+  if (!locked.length) {
+    // Someone else finished it first and holds the lease: leave the sending to them.
+    const cur = await deps.db.query.chatSessions.findFirst({ where: eq(chatSessions.id, s.id) });
+    return { status: cur ? "queued" : "saved", recordName: s.recordName };
+  }
   await audit(deps, actor, "chat_finished", s.recordName, { finishedBy });
   notifyChange(deps, s);
-  return syncSession(deps, s.id);
+  const r = await syncSession(deps, s.id);
+  return { status: r.status === "queued" ? "queued" : "saved", recordName: s.recordName };
 }
 
 /** Sends a locked chat to the EMR. On success, deletes every trace of its content from the platform. */

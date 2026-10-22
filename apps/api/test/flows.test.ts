@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { authenticator } from "otplib";
 import { attachments, chatSessions, messages } from "../src/db/schema.ts";
-import { workerTick } from "../src/services/chat.ts";
+import { addMessage, finishSession, workerTick } from "../src/services/chat.ts";
 import { Client, inviteToken, PASSWORD, setup } from "./helpers.ts";
 
 type Env = Awaited<ReturnType<typeof setup>>;
@@ -130,6 +130,56 @@ describe("chat lifecycle", () => {
     await workerTick(env.deps);
     expect(await env.deps.db.select().from(chatSessions)).toHaveLength(0);
     expect(env.emr.records.find(r => r.fileNumber === "10633")!.finishedBy).toBe("auto");
+  });
+
+  it("never loses a message sent while the chat is being finished", async () => {
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    const patient = await onboardPatient(sara, "10633", "mariam.s");
+    const pid = (await patient.ok("GET", "/api/patient/me")).team[0].id;
+    await patient.ok("POST", `/api/patient/providers/${pid}/chat/messages`, { text: "First message" });
+    // The patient's request read the chat as open just before the provider finished it.
+    const [stale] = await env.deps.db.select().from(chatSessions);
+
+    // While the chat is on its way to the EMR, the patient's text and file arrive.
+    const emr = env.deps.emr;
+    const save = emr.saveChatRecord.bind(emr);
+    const late: unknown[] = [];
+    emr.saveChatRecord = async (...args) => {
+      for (const content of [{ text: "Sent during finish" }, { file: { name: "late.pdf", mimeType: "application/pdf", content: Buffer.from("%PDF late") } }]) {
+        late.push(await addMessage(env.deps, stale!, "patient", content).catch(e => (e as { code?: string }).code));
+      }
+      return save(...args);
+    };
+
+    expect((await sara.ok("POST", "/api/provider/patients/10633/chat/finish")).status).toBe("saved");
+    expect(late).toEqual(["chat_locked", "chat_locked"]);
+    expect(env.files.files.size).toBe(0);
+    expect(await env.deps.db.select().from(messages)).toHaveLength(0);
+    expect(await env.deps.db.select().from(attachments)).toHaveLength(0);
+  });
+
+  it("sends a chat to the EMR once when it is finished twice at the same moment", async () => {
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    const patient = await onboardPatient(sara, "10633", "mariam.s");
+    const pid = (await patient.ok("GET", "/api/patient/me")).team[0].id;
+    await patient.ok("POST", `/api/patient/providers/${pid}/chat/messages`, { text: "Hello" });
+    const [s] = await env.deps.db.select().from(chatSessions);
+
+    const emr = env.deps.emr;
+    const save = emr.saveChatRecord.bind(emr);
+    let sends = 0;
+    emr.saveChatRecord = async (...args) => { sends++; return save(...args); };
+
+    // The provider's Finish button and the automatic finish, together.
+    const results = await Promise.all([
+      finishSession(env.deps, s!, "provider", { type: "system" }),
+      finishSession(env.deps, s!, "auto", { type: "system" })
+    ]);
+    expect(sends).toBe(1);
+    expect(results[0]!.status).toBe("saved");
+    expect(env.emr.records.filter(r => r.fileNumber === "10633")).toHaveLength(1);
   });
 
   it("flags risk words and replies automatically after hours", async () => {
