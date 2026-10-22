@@ -38,7 +38,7 @@ export function adminRoutes(app: FastifyInstance, deps: Deps) {
     const token = newToken();
     await deps.db.insert(invitations).values({ kind: "staff", subject: p!.id, tokenHash: sha256(token), expiresAt: new Date(deps.now().getTime() + INVITE_HOURS * 3600_000) });
     await deps.notifier.email(body.email, "Your Vwelfare Connect account",
-      `Set your password and sign-in app here (link valid for ${INVITE_HOURS} hours): ${deps.config.APP_BASE_URL}/invite/staff/${token}`);
+      `Set your password and sign-in app here (link valid for ${INVITE_HOURS} hours): ${deps.config.APP_BASE_URL}/invite/staff#${token}`);
     await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "provider_created", p!.id);
     return { id: p!.id };
   });

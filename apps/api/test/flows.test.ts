@@ -25,7 +25,15 @@ describe("staff accounts", () => {
     const admin = await env.staffClient("admin@vwelfare.test");
     await admin.ok("POST", "/api/admin/providers", { nameEn: "Dr. New", specialtyEn: "Psychiatrist", email: "new@vwelfare.test", emrStaffId: "ST-9999" });
     const email = env.notifier.sent.find(s => s.channel === "email" && s.to === "new@vwelfare.test")!;
-    await new Client(env.app).ok("POST", "/api/auth/staff/accept-invite", { token: inviteToken(email.text), password: PASSWORD });
+    // The token sits after "#", so it never reaches a server log; the app sends it in a request body.
+    expect(email.text).toMatch(/\/invite\/staff#/);
+    const token = inviteToken(email.text);
+    const anon = new Client(env.app);
+    expect((await anon.ok("POST", "/api/auth/invite/staff", { token })).email).toBe("new@vwelfare.test");
+    expect((await anon.req("GET", `/api/auth/invite/staff/${token}`)).statusCode).toBe(404);
+    await anon.ok("POST", "/api/auth/staff/accept-invite", { token, password: PASSWORD });
+    expect((await anon.req("POST", "/api/auth/invite/staff", { token })).statusCode).toBe(410); // used once only
+    expect((await anon.req("POST", "/api/auth/staff/accept-invite", { token, password: PASSWORD })).statusCode).toBe(410);
 
     const p = new Client(env.app);
     expect((await p.ok("POST", "/api/auth/staff/login", { email: "new@vwelfare.test", password: PASSWORD })).next).toBe("mfa-setup");

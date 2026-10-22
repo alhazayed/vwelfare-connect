@@ -91,8 +91,12 @@ export function authRoutes(app: FastifyInstance, deps: Deps) {
     return { ok: true, role: fresh.role };
   });
 
-  app.get<{ Params: { token: string } }>("/api/auth/invite/staff/:token", async req => {
-    const inv = await findInvitation(req.params.token, "staff");
+  // Invitation links carry the token after "#", which browsers never send, and the app posts it here in the body,
+  // so a working token never appears in a URL that servers, proxies or Vercel log.
+  const inviteBody = z.object({ token: z.string().min(1).max(200) });
+
+  app.post("/api/auth/invite/staff", limited, async req => {
+    const inv = await findInvitation(inviteBody.parse(req.body).token, "staff");
     const s = await deps.db.query.staff.findFirst({ where: eq(staff.id, inv.subject) });
     return { email: s?.email, name: { en: s?.nameEn, ar: s?.nameAr } };
   });
@@ -107,8 +111,8 @@ export function authRoutes(app: FastifyInstance, deps: Deps) {
   });
 
   // ---- patients ----
-  app.get<{ Params: { token: string } }>("/api/auth/invite/patient/:token", async req => {
-    const inv = await findInvitation(req.params.token, "patient");
+  app.post("/api/auth/invite/patient", limited, async req => {
+    const inv = await findInvitation(inviteBody.parse(req.body).token, "patient");
     const p = await deps.db.query.patients.findFirst({ where: eq(patients.fileNumber, inv.subject) });
     const by = p?.invitedBy ? await deps.db.query.staff.findFirst({ where: eq(staff.id, p.invitedBy) }) : null;
     return { invitedBy: by ? { en: by.nameEn, ar: by.nameAr } : null };

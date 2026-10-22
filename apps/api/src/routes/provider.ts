@@ -74,7 +74,7 @@ export function providerRoutes(app: FastifyInstance, deps: Deps) {
       await tx.insert(providerPatients).values({ providerId: me.id, fileNumber: body.fileNumber });
       await tx.insert(invitations).values({ kind: "patient", subject: body.fileNumber, tokenHash: sha256(token), expiresAt: new Date(deps.now().getTime() + INVITE_HOURS * 3600_000) });
     });
-    await deps.notifier.sms(digits, `Vwelfare: you're invited to message your care team securely. Set up your account (valid ${INVITE_HOURS} hours): ${deps.config.APP_BASE_URL}/invite/patient/${token}`);
+    await deps.notifier.sms(digits, `Vwelfare: you're invited to message your care team securely. Set up your account (valid ${INVITE_HOURS} hours): ${deps.config.APP_BASE_URL}/invite/patient#${token}`);
     await audit(deps, actor(me.id, req.ip), "patient_created_and_invited", body.fileNumber);
     return { status: "invited" };
   });

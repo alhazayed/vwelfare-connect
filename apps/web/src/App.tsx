@@ -40,8 +40,8 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/invite/staff/:token" element={<StaffInvite />} />
-      <Route path="/invite/patient/:token" element={<PatientInvite onDone={refresh} />} />
+      <Route path="/invite/staff/:token?" element={<StaffInvite />} />
+      <Route path="/invite/patient/:token?" element={<PatientInvite onDone={refresh} />} />
       <Route path="/staff" element={home ? <Navigate to={home} replace /> : <StaffLogin onDone={refresh} />} />
       <Route path="/" element={home ? <Navigate to={home} replace /> : <PatientLogin onDone={refresh} />} />
       <Route path="/admin" element={me?.kind === "staff" && me.mfaOk && me.role === "admin" ? <Shell me={me} onSignOut={signOut}><AdminPage /></Shell> : <Navigate to="/staff" replace />} />

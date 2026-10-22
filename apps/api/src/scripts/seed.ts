@@ -50,7 +50,7 @@ Development accounts (also saved to data/dev-accounts.txt, which git ignores):
   Patient       layla.h (file 10482)           ${laylaPw}
 
   Patient invitation for file 10517 (valid 72 hours):
-  ${config.APP_BASE_URL}/invite/patient/${token}
+  ${config.APP_BASE_URL}/invite/patient#${token}
 
 Staff 6-digit codes: add the secret to an authenticator app, or run
   npm run otp -- <secret>

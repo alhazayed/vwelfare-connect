@@ -102,7 +102,7 @@ export class Client {
 }
 
 export function inviteToken(text: string) {
-  const m = text.match(/\/invite\/(?:patient|staff)\/([A-Za-z0-9_-]+)/);
+  const m = text.match(/\/invite\/(?:patient|staff)#([A-Za-z0-9_-]+)/);
   if (!m) throw new Error(`No invitation link in: ${text}`);
   return m[1]!;
 }
