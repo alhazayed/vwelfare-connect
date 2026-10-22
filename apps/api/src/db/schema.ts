@@ -45,10 +45,14 @@ export const invitations = pgTable("invitations", {
   createdAt: ts("created_at").notNull().defaultNow()
 });
 
+// A provider who adds a patient already on the platform joins their care team only when the patient accepts
+// ("pending" until then). The provider who first invites a patient is "accepted" from the start.
 export const providerPatients = pgTable("provider_patients", {
   providerId: uuid("provider_id").notNull().references(() => staff.id),
   fileNumber: text("file_number").notNull().references(() => patients.fileNumber),
-  createdAt: ts("created_at").notNull().defaultNow()
+  status: text("status", { enum: ["pending", "accepted", "declined"] }).notNull().default("accepted"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  decidedAt: ts("decided_at")
 }, t => [primaryKey({ columns: [t.providerId, t.fileNumber] })]);
 
 export const consents = pgTable("consents", {

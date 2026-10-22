@@ -9,6 +9,7 @@ type MeData = {
   fileNumber: string; username: string; name: Bilingual | null; afterHours: boolean; help: Help;
   team: Array<{ id: string; name: Bilingual; specialty: Bilingual; openChat: boolean }>;
   consents: Array<{ providerId: string; status: "pending" | "granted" | "denied" | "withdrawn" }>;
+  teamRequests: Array<{ providerId: string; name: Bilingual; specialty: Bilingual }>;
 };
 
 export function PatientPage() {
@@ -36,6 +37,9 @@ export function PatientPage() {
       me.reload();
     } catch (e) { toast(errText(e), true); }
   };
+  const answerTeam = async (pid: string, a: "accepted" | "declined") => {
+    try { await api("POST", `/api/patient/team-requests/${pid}`, { answer: a }); me.reload(); } catch (e) { toast(errText(e), true); }
+  };
   const provider = d.team.find(p => p.id === sel);
 
   return (
@@ -45,6 +49,15 @@ export function PatientPage() {
         <div className="head-actions"><HelpButton onClick={() => setHelp(true)} /></div>
       </div>
 
+      {d.teamRequests.map(r => (
+        <div key={r.providerId} className="card req">
+          <div><h3>{t("teamReqTitle")}</h3><p>{t("teamReqBody", { provider: L(r.name), specialty: L(r.specialty) })}</p></div>
+          <div className="actions">
+            <button className="btn" onClick={() => answerTeam(r.providerId, "declined")}>{t("decline")}</button>
+            <button className="btn primary" onClick={() => answerTeam(r.providerId, "accepted")}>{t("accept")}</button>
+          </div>
+        </div>
+      ))}
       {d.consents.filter(c => c.status === "pending").map(c => (
         <div key={c.providerId} className="card req">
           <div><h3>{t("reqTitle")}</h3><p>{t("reqBody", { provider: nameOf(c.providerId) })}</p></div>

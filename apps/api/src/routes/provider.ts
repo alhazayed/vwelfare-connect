@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { chatSessions, consents, invitations, messages, patients, providerPatients, staff } from "../db/schema.ts";
@@ -12,59 +12,84 @@ import { patientKey } from "../realtime.ts";
 import { readUpload, recordView, sendProtectedFile } from "./util.ts";
 
 const INVITE_HOURS = 72;
+// After a patient declines a care-team request, the same provider can ask again only after this long.
+const ASK_AGAIN_DAYS = 7;
 const fileNumber = z.string().trim().regex(/^\d{3,12}$/, "Enter a valid file number");
 
 export function providerRoutes(app: FastifyInstance, deps: Deps) {
   const actor = (id: string, ip: string) => ({ type: "provider" as const, id, ip });
 
+  const findLink = (providerId: string, file: string) =>
+    deps.db.query.providerPatients.findFirst({ where: and(eq(providerPatients.providerId, providerId), eq(providerPatients.fileNumber, file)) });
+
+  /** Only patients who accepted this provider (or were invited by them) count as theirs. */
   async function requireLinked(providerId: string, file: string) {
-    const link = await deps.db.query.providerPatients.findFirst({ where: and(eq(providerPatients.providerId, providerId), eq(providerPatients.fileNumber, file)) });
-    if (!link) throw new HttpError(404, "not_your_patient", "This patient is not in your list");
+    const link = await findLink(providerId, file);
+    if (link?.status !== "accepted") throw new HttpError(404, "not_your_patient", "This patient is not in your list");
     const p = await deps.db.query.patients.findFirst({ where: eq(patients.fileNumber, file) });
     return p!;
   }
 
   app.get("/api/provider/patients", async req => {
     const me = requireStaff(req, "provider");
-    const rows = await deps.db.select({ fileNumber: patients.fileNumber, status: patients.status })
+    const rows = await deps.db.select({ fileNumber: patients.fileNumber, status: patients.status, link: providerPatients.status })
       .from(providerPatients).innerJoin(patients, eq(patients.fileNumber, providerPatients.fileNumber))
       .where(eq(providerPatients.providerId, me.id));
     const sessions = await deps.db.select().from(chatSessions).where(eq(chatSessions.providerId, me.id));
     return Promise.all(rows.map(async r => {
+      // Until the patient accepts, the provider sees only the file number and the state of the request.
+      if (r.link !== "accepted") return { fileNumber: r.fileNumber, status: r.status, link: r.link, name: null, openChat: false, lastFrom: null, risk: false, waitingForEmr: false };
       const open = sessions.find(s => s.fileNumber === r.fileNumber && s.status === "open");
       const last = open ? await deps.db.query.messages.findFirst({
         where: and(eq(messages.sessionId, open.id), ne(messages.sender, "system")), orderBy: desc(messages.seq)
       }) : undefined;
       const name = await deps.emr.getPatientName(r.fileNumber).catch(() => null);
       return {
-        fileNumber: r.fileNumber, status: r.status, name,
+        fileNumber: r.fileNumber, status: r.status, link: r.link, name,
         openChat: !!open, lastFrom: last?.sender ?? null, risk: !!open?.risk,
         waitingForEmr: sessions.some(s => s.fileNumber === r.fileNumber && s.status === "locked")
       };
     }));
   });
 
-  app.post("/api/provider/lookup", async req => {
+  // Lookups show a name and visit dates from the EMR for any file number, so each provider gets a limited number.
+  const lookupLimit = { config: { rateLimit: {
+    max: 30, timeWindow: "1 minute",
+    keyGenerator: (req: FastifyRequest) => req.auth?.kind === "staff" ? `lookup:${req.auth.staff.id}` : `lookup:${req.ip}`
+  } } };
+
+  app.post("/api/provider/lookup", lookupLimit, async req => {
     const me = requireStaff(req, "provider");
     const { fileNumber: file } = z.object({ fileNumber }).parse(req.body);
     const name = await deps.emr.getPatientName(file);
     if (!name) throw new HttpError(404, "not_in_emr", `No patient with file number ${file} in the EMR`);
     const visits = await deps.emr.getVisits(file);
     const p = await deps.db.query.patients.findFirst({ where: eq(patients.fileNumber, file) });
-    const mine = p ? !!(await deps.db.query.providerPatients.findFirst({ where: and(eq(providerPatients.providerId, me.id), eq(providerPatients.fileNumber, file)) })) : false;
+    const link = p ? await findLink(me.id, file) : undefined;
     await audit(deps, actor(me.id, req.ip), "patient_looked_up", file);
-    return { fileNumber: file, name, visits, onPlatform: !!p, mine };
+    return { fileNumber: file, name, visits, onPlatform: !!p, mine: link?.status === "accepted", request: link && link.status !== "accepted" ? link.status : null };
   });
 
-  app.post("/api/provider/patients", async req => {
+  app.post("/api/provider/patients", lookupLimit, async req => {
     const me = requireStaff(req, "provider");
     const body = z.object({ fileNumber, mobile: z.string().optional() }).parse(req.body);
     if (!(await deps.emr.getPatientName(body.fileNumber))) throw new HttpError(404, "not_in_emr", "No patient with that file number in the EMR");
     const existing = await deps.db.query.patients.findFirst({ where: eq(patients.fileNumber, body.fileNumber) });
     if (existing) {
-      await deps.db.insert(providerPatients).values({ providerId: me.id, fileNumber: body.fileNumber }).onConflictDoNothing();
-      await audit(deps, actor(me.id, req.ip), "patient_linked", body.fileNumber);
-      return { status: "linked" };
+      // The patient decides who joins their care team: the link waits until they accept it in the app.
+      const now = deps.now();
+      const link = await findLink(me.id, body.fileNumber);
+      if (link?.status === "accepted") return { status: "linked" };
+      if (link?.status === "pending") return { status: "pending" };
+      if (link?.status === "declined" && link.decidedAt && now.getTime() - link.decidedAt.getTime() < ASK_AGAIN_DAYS * 86_400_000) {
+        throw new HttpError(409, "link_declined", "The patient declined this request recently. You can ask again 7 days after they declined.");
+      }
+      await deps.db.insert(providerPatients).values({ providerId: me.id, fileNumber: body.fileNumber, status: "pending", createdAt: now })
+        .onConflictDoUpdate({ target: [providerPatients.providerId, providerPatients.fileNumber], set: { status: "pending", createdAt: now, decidedAt: null } });
+      if (existing.mobileEnc) await deps.notifier.sms(deps.cipher.decrypt(existing.mobileEnc), "Vwelfare: you have a new request in Vwelfare Connect. Sign in to see it.");
+      await audit(deps, actor(me.id, req.ip), "care_team_requested", body.fileNumber);
+      deps.hub.publish([patientKey(body.fileNumber)], { type: "team", fileNumber: body.fileNumber });
+      return { status: "pending" };
     }
     const digits = (body.mobile ?? "").replace(/[^\d+]/g, "");
     if (digits.replace("+", "").length < 8) throw new HttpError(400, "bad_mobile", "Enter a mobile number with at least 8 digits");
