@@ -20,12 +20,15 @@ const schema = z.object({
   CRON_SECRET: z.string().optional().transform(v => v || undefined),
   VERCEL: z.string().optional(),
   VERCEL_ENV: z.string().optional(),
+  // Hosts the EMR address may point to, comma-separated (host or host:port). Empty = only the host of EMR_BASE_URL.
+  // An EMR_BASE_URL saved in the admin's secrets list must match one of these, so it can't send chats elsewhere.
+  EMR_ALLOWED_HOSTS: z.string().optional().transform(v => (v ?? "").split(",").map(h => h.trim().toLowerCase()).filter(Boolean)),
   EMR_CLIENT_ID: z.string().default("vwelfare-connect"),
   EMR_CLIENT_SECRET: z.string().default("dev-secret"),
   SEED_ADMIN_EMAIL: z.string().email().default("admin@vwelfare.example")
 });
 
-export type Config = Omit<z.infer<typeof schema>, "EMR_BASE_URL"> & { EMR_BASE_URL: string; dataDir: string };
+export type Config = Omit<z.infer<typeof schema>, "EMR_BASE_URL"> & { EMR_BASE_URL: string; dataDir: string; production: boolean };
 
 export function loadConfig(overrides: Partial<Record<keyof z.input<typeof schema>, string>> = {}): Config {
   const parsed = schema.parse({ ...process.env, ...overrides });
@@ -37,5 +40,7 @@ export function loadConfig(overrides: Partial<Record<keyof z.input<typeof schema
   }
   if (production && !parsed.EMR_BASE_URL) throw new Error("EMR_BASE_URL must be set in production. The mock EMR is never used there.");
   const EMR_BASE_URL = parsed.EMR_BASE_URL ?? (production ? undefined : parsed.MOCK_EMR_URL) ?? "http://localhost:4100";
-  return { ...parsed, EMR_BASE_URL, dataDir: resolve(repoRoot, parsed.DATA_DIR) };
+  if (production && new URL(EMR_BASE_URL).protocol !== "https:") throw new Error("EMR_BASE_URL must use https in production.");
+  const EMR_ALLOWED_HOSTS = parsed.EMR_ALLOWED_HOSTS.length ? parsed.EMR_ALLOWED_HOSTS : [new URL(EMR_BASE_URL).host.toLowerCase()];
+  return { ...parsed, EMR_BASE_URL, EMR_ALLOWED_HOSTS, production, dataDir: resolve(repoRoot, parsed.DATA_DIR) };
 }

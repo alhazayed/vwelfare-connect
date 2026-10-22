@@ -2,7 +2,7 @@
 // Unlocking lasts 10 minutes in the current sign-in. Every unlock, reveal and change is audited, by name only.
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { authSessions, staff } from "../db/schema.ts";
 import { hashPassword, verifyPassword } from "../lib/crypto.ts";
 import { HttpError, type Deps } from "../deps.ts";
@@ -18,6 +18,16 @@ const vaultPassword = z.string().min(12, "Use at least 12 characters").max(200);
 export function secretsRoutes(app: FastifyInstance, deps: Deps) {
   const limited = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
   const actor = (id: string, ip: string) => ({ type: "admin" as const, id, ip });
+
+  /** The EMR settings decide where every chat is sent, so all admins hear about each change. Names only, never values. */
+  async function alertEmrChange(name: string) {
+    if (!name.startsWith("EMR_")) return;
+    const admins = await deps.db.select({ email: staff.email }).from(staff).where(and(eq(staff.role, "admin"), eq(staff.active, true)));
+    for (const a of admins) {
+      await deps.notifier.email(a.email, "An EMR connection setting was changed",
+        `The setting ${name} in the Vwelfare Connect secrets list was changed. If you didn't expect this, sign in, check the secrets list and the activity log, and change the secrets password.`);
+    }
+  }
 
   async function unlockedUntil(req: FastifyRequest): Promise<Date | null> {
     if (!req.auth) return null;
@@ -115,6 +125,7 @@ export function secretsRoutes(app: FastifyInstance, deps: Deps) {
     const existed = (await deps.secrets.list()).some(s => s.name === req.params.name && s.source === "saved");
     await deps.secrets.set(req.params.name, body.value, { description: body.description || null, isSecret: body.isSecret, by: admin.id, now: deps.now() });
     await audit(deps, actor(admin.id, req.ip), existed ? "secret_changed" : "secret_added", req.params.name);
+    await alertEmrChange(req.params.name);
     return { ok: true };
   });
 
@@ -122,6 +133,7 @@ export function secretsRoutes(app: FastifyInstance, deps: Deps) {
     const admin = await requireUnlocked(req);
     await deps.secrets.remove(req.params.name);
     await audit(deps, actor(admin.id, req.ip), deps.secrets.isKnown(req.params.name) ? "secret_cleared" : "secret_deleted", req.params.name);
+    await alertEmrChange(req.params.name);
     return { ok: true };
   });
 

@@ -40,7 +40,7 @@ export async function setup() {
   const deps: Deps = {
     db, config, files, notifier, cipher, secrets,
     scanner: noScan,
-    emr: emrFromSecrets(secrets),
+    emr: emrFromSecrets(secrets, config),
     hub: new Hub(),
     now: () => clock.now
   };
