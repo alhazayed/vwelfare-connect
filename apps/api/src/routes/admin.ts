@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { auditLog, authSessions, chatSessions, invitations, providerPatients, staff } from "../db/schema.ts";
 import { newToken, sha256 } from "../lib/crypto.ts";
 import { HttpError, type Deps } from "../deps.ts";
 import { requireStaff } from "../auth.ts";
 import { audit } from "../services/audit.ts";
 import { getRules, rulesSchema, saveRules } from "../services/rules.ts";
-import { finishSession } from "../services/chat.ts";
+import { finishSession, LEASE_MS } from "../services/chat.ts";
 
 const INVITE_HOURS = 72;
 
@@ -70,6 +70,35 @@ export function adminRoutes(app: FastifyInstance, deps: Deps) {
     const admin = requireStaff(req, "admin");
     await deps.db.update(staff).set({ active: true }).where(and(eq(staff.id, req.params.id), eq(staff.role, "provider")));
     await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "provider_reactivated", req.params.id);
+    return { ok: true };
+  });
+
+  // Finished chats still waiting for the EMR. Record names and error codes only: no content, no patient names.
+  app.get("/api/admin/sync-queue", async req => {
+    requireStaff(req, "admin");
+    return deps.db.select({
+      id: chatSessions.id, recordName: chatSessions.recordName, finishedBy: chatSessions.finishedBy, endedAt: chatSessions.endedAt,
+      attempts: chatSessions.syncAttempts, nextAttemptAt: chatSessions.nextAttemptAt, lastError: chatSessions.lastError
+    }).from(chatSessions).where(eq(chatSessions.status, "locked")).orderBy(chatSessions.endedAt);
+  });
+
+  // "Try again now", for example after the EMR vendor fixed what made it refuse the chat. The worker sends it within seconds.
+  app.post<{ Params: { id: string } }>("/api/admin/sync-queue/:id/retry", async req => {
+    const admin = requireStaff(req, "admin");
+    const id = z.string().uuid().safeParse(req.params.id);
+    const notWaiting = new HttpError(404, "not_found", "This chat is no longer waiting for the EMR");
+    if (!id.success) throw notWaiting;
+    const now = deps.now();
+    // Only a chat waiting out a longer retry gap: one being sent right now holds a lease of LEASE_MS, and is left alone.
+    const [s] = await deps.db.update(chatSessions).set({ nextAttemptAt: now })
+      .where(and(eq(chatSessions.id, id.data), eq(chatSessions.status, "locked"), gt(chatSessions.nextAttemptAt, new Date(now.getTime() + LEASE_MS))))
+      .returning({ recordName: chatSessions.recordName });
+    if (!s) {
+      const cur = await deps.db.query.chatSessions.findFirst({ where: and(eq(chatSessions.id, id.data), eq(chatSessions.status, "locked")) });
+      if (!cur) throw notWaiting;
+      throw new HttpError(409, "retry_soon", "This chat is being sent now or will be tried again within 2 minutes");
+    }
+    await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "chat_sync_retry_requested", s.recordName);
     return { ok: true };
   });
 

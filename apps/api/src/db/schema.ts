@@ -76,7 +76,10 @@ export const chatSessions = pgTable("chat_sessions", {
   remindedAt: ts("reminded_at"),
   syncAttempts: integer("sync_attempts").notNull().default(0),
   nextAttemptAt: ts("next_attempt_at"),
-  lastError: text("last_error")
+  // A short code ("emr_unavailable", "rejected_400_invalid_record"), never the EMR's own error text.
+  lastError: text("last_error"),
+  // When the admins were told this finished chat is stuck on its way to the EMR.
+  alertedAt: ts("alerted_at")
 }, t => [index("chat_sessions_file_provider").on(t.fileNumber, t.providerId), index("chat_sessions_status").on(t.status)]);
 
 export const attachments = pgTable("attachments", {

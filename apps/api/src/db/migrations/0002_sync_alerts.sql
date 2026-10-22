@@ -1,0 +1,1 @@
+ALTER TABLE "chat_sessions" ADD COLUMN "alerted_at" timestamp with time zone;
