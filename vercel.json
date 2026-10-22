@@ -21,7 +21,19 @@
     },
     "web": {
       "root": "apps/web",
-      "framework": "vite"
+      "framework": "vite",
+      "routes": [
+        {
+          "src": "/(staff|admin|provider|patient|invite/.*)",
+          "transforms": [
+            {
+              "type": "request.path",
+              "op": "set",
+              "args": "/index.html"
+            }
+          ]
+        }
+      ]
     }
   },
   "rewrites": [
@@ -29,13 +41,6 @@
       "source": "/api/(.*)",
       "destination": {
         "service": "api"
-      }
-    },
-    {
-      "source": "/(staff|admin|provider|patient|invite/.*)",
-      "destination": {
-        "service": "web",
-        "path": "/index.html"
       }
     },
     {
