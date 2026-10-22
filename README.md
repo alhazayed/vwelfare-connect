@@ -90,7 +90,7 @@ These are deliberately not finished. Each needs a decision or a service from Vwe
 
 | Service | Public path | What it is |
 | --- | --- | --- |
-| `web` | everything except `/api` | The React app (Vite build). |
+| `web` | everything except `/api` | The React app (Vite build). The app's own pages (`/staff`, `/admin`, `/provider`, `/patient`, `/invite/...`) are rewritten to `index.html` so links straight to them work. |
 | `api` | `/api/*` | The Fastify API, run as a function. Its routes already start with `/api`, so no path rewriting is needed. |
 | `mock-emr` | none (internal) | The stand-in EMR. Only `api` can reach it, through a binding that injects `MOCK_EMR_URL`. The API ignores it in production (`VERCEL_ENV=production`) and requires a real `EMR_BASE_URL` there. |
 

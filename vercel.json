@@ -6,7 +6,12 @@
       "framework": "fastify",
       "entrypoint": "src/server.ts",
       "bindings": [
-        { "type": "service", "service": "mock-emr", "format": "url", "env": "MOCK_EMR_URL" }
+        {
+          "type": "service",
+          "service": "mock-emr",
+          "format": "url",
+          "env": "MOCK_EMR_URL"
+        }
       ]
     },
     "mock-emr": {
@@ -20,10 +25,30 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": { "service": "api" } },
-    { "source": "/(.*)", "destination": { "service": "web" } }
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(staff|admin|provider|patient|invite/.*)",
+      "destination": {
+        "service": "web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
   ],
   "crons": [
-    { "path": "/api/internal/worker", "schedule": "* * * * *" }
+    {
+      "path": "/api/internal/worker",
+      "schedule": "* * * * *"
+    }
   ]
 }
