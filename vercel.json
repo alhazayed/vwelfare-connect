@@ -6,7 +6,12 @@
       "framework": "fastify",
       "entrypoint": "src/server.ts",
       "bindings": [
-        { "type": "service", "service": "mock-emr", "format": "url", "env": "MOCK_EMR_URL" }
+        {
+          "type": "service",
+          "service": "mock-emr",
+          "format": "url",
+          "env": "MOCK_EMR_URL"
+        }
       ]
     },
     "mock-emr": {
@@ -16,12 +21,28 @@
     },
     "web": {
       "root": "apps/web",
-      "framework": "vite"
+      "framework": "vite",
+      "routes": [
+        {
+          "src": "/(staff|admin|provider|patient|invite/.*)",
+          "dest": "/index.html"
+        }
+      ]
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": { "service": "api" } },
-    { "source": "/(.*)", "destination": { "service": "web" } }
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
+      }
+    }
   ],
   "headers": [
     {
@@ -43,6 +64,9 @@
     }
   ],
   "crons": [
-    { "path": "/api/internal/worker", "schedule": "* * * * *" }
+    {
+      "path": "/api/internal/worker",
+      "schedule": "* * * * *"
+    }
   ]
 }

@@ -49,7 +49,7 @@ Key files:
 | A finished chat is sent exactly once | Locked chats carry the chat ID as `Idempotency-Key`; the worker and the Finish button take turns through a lease |
 | Chats finish automatically | `workerTick`: reminder after 20 hours, finish after 24 hours without messages (editable in Chat rules) |
 | Providers see other providers' chats only with consent | `checkRecordAccess` in `routes/provider.ts` |
-| Staff use MFA; patients lock after 5 wrong passwords | `routes/auth.ts` |
+| Staff use MFA; 5 wrong passwords or codes lock an account for 15 minutes; each code works once | `routes/auth.ts` |
 | Message text, mobile numbers, MFA secrets and files are encrypted | `lib/crypto.ts` (AES-256-GCM) |
 | Risk words flag the chat and show patients emergency numbers | `lib/risk.ts` (English and Arabic; the clinical lead should review the list) |
 | After-hours automatic reply | Working hours in Chat rules; checked in `addMessage` |
@@ -77,7 +77,7 @@ These are deliberately not finished. Each needs a decision or a service from Vwe
 - [ ] **Malware scanning.** `lib/files.ts` has a `Scanner` interface with a placeholder that accepts every file. Connect ClamAV or the cloud provider's scanner.
 - [ ] **Encryption keys.** Move `FIELD_ENCRYPTION_KEY` into the cloud's key-management service.
 - [ ] **File storage.** Replace the encrypted-disk store with private, encrypted cloud object storage.
-- [ ] **Hosting.** PostgreSQL (`DATABASE_URL`) and the app in the same cloud region as the EMR, with HTTPS (`COOKIE_SECURE=true`). Build the web app with `npm run build`; serve it and proxy `/api` (including WebSockets) to the API.
+- [ ] **Hosting.** PostgreSQL (`DATABASE_URL`) and the app in the same cloud region as the EMR, with HTTPS (`COOKIE_SECURE=true`). Set `TRUST_PROXY` to the load balancer's addresses (not needed on Vercel), or sign-in limits and the audit log see the proxy instead of the person. Build the web app with `npm run build`; serve it and proxy `/api` (including WebSockets) to the API.
 - [ ] **Emergency numbers and working hours.** Set them as super admin under Chat rules. The default working days (Sunday–Thursday, 08:00–16:00) are an assumption.
 - [ ] **Password reset.** Patients currently contact the center; add a reset-by-SMS-code flow once SMS is connected.
 - [ ] **Security review.** Independent penetration test, and update the authenticator library (`otplib` 12 is deprecated in favour of 13).
@@ -90,7 +90,7 @@ These are deliberately not finished. Each needs a decision or a service from Vwe
 
 | Service | Public path | What it is |
 | --- | --- | --- |
-| `web` | everything except `/api` | The React app (Vite build). |
+| `web` | everything except `/api` | The React app (Vite build). The app's own pages (`/staff`, `/admin`, `/provider`, `/patient`, `/invite/...`) are rewritten to `index.html` so links straight to them work. |
 | `api` | `/api/*` | The Fastify API, run as a function. Its routes already start with `/api`, so no path rewriting is needed. |
 | `mock-emr` | none (internal) | The stand-in EMR. Only `api` can reach it, through a binding that injects `MOCK_EMR_URL`. The API ignores it in production (`VERCEL_ENV=production`) and requires a real `EMR_BASE_URL` there. |
 

@@ -13,6 +13,10 @@ const schema = z.object({
   APP_BASE_URL: z.string().url().default("http://localhost:5173"),
   CENTER_TIMEZONE: z.string().optional().transform(v => v || Intl.DateTimeFormat().resolvedOptions().timeZone),
   COOKIE_SECURE: z.enum(["true", "false"]).default("false").transform(v => v === "true"),
+  // Which proxies may set X-Forwarded-For (sign-in limits and the audit log use the client IP): addresses or CIDR
+  // ranges, comma-separated. Default: only a proxy on the same machine, or every proxy on Vercel (its edge
+  // replaces any X-Forwarded-For the visitor sends).
+  TRUST_PROXY: z.string().optional().transform(v => v?.split(",").map(x => x.trim()).filter(Boolean)).transform(v => v?.length ? v : undefined),
   EMR_BASE_URL: z.string().optional().transform(v => v || undefined).pipe(z.string().url().optional()),
   // On Vercel, the binding to the internal mock-emr service injects this. Never used in production.
   MOCK_EMR_URL: z.string().optional().transform(v => v || undefined).pipe(z.string().url().optional()),
@@ -28,7 +32,7 @@ const schema = z.object({
   SEED_ADMIN_EMAIL: z.string().email().default("admin@vwelfare.example")
 });
 
-export type Config = Omit<z.infer<typeof schema>, "EMR_BASE_URL"> & { EMR_BASE_URL: string; dataDir: string; production: boolean };
+export type Config = Omit<z.infer<typeof schema>, "EMR_BASE_URL" | "TRUST_PROXY"> & { EMR_BASE_URL: string; TRUST_PROXY: string[] | true; dataDir: string; production: boolean };
 
 export function loadConfig(overrides: Partial<Record<keyof z.input<typeof schema>, string>> = {}): Config {
   const parsed = schema.parse({ ...process.env, ...overrides });
@@ -42,5 +46,6 @@ export function loadConfig(overrides: Partial<Record<keyof z.input<typeof schema
   const EMR_BASE_URL = parsed.EMR_BASE_URL ?? (production ? undefined : parsed.MOCK_EMR_URL) ?? "http://localhost:4100";
   if (production && new URL(EMR_BASE_URL).protocol !== "https:") throw new Error("EMR_BASE_URL must use https in production.");
   const EMR_ALLOWED_HOSTS = parsed.EMR_ALLOWED_HOSTS.length ? parsed.EMR_ALLOWED_HOSTS : [new URL(EMR_BASE_URL).host.toLowerCase()];
-  return { ...parsed, EMR_BASE_URL, EMR_ALLOWED_HOSTS, production, dataDir: resolve(repoRoot, parsed.DATA_DIR) };
+  const TRUST_PROXY = parsed.TRUST_PROXY ?? (parsed.VERCEL ? true : ["127.0.0.1", "::1"]);
+  return { ...parsed, EMR_BASE_URL, EMR_ALLOWED_HOSTS, TRUST_PROXY, production, dataDir: resolve(repoRoot, parsed.DATA_DIR) };
 }

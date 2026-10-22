@@ -16,6 +16,8 @@ export const staff = pgTable("staff", {
   passwordHash: text("password_hash"),
   mfaSecretEnc: text("mfa_secret_enc"),
   mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+  // The authenticator time step of the last accepted code, so the same code can't be used twice.
+  mfaLastStep: integer("mfa_last_step"),
   active: boolean("active").notNull().default(true),
   failedLogins: integer("failed_logins").notNull().default(0),
   lockedUntil: ts("locked_until"),

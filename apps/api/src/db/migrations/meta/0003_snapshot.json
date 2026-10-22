@@ -1,5 +1,5 @@
 {
-  "id": "c1ae8e08-05e3-4709-bd41-c0784dcf2bd7",
+  "id": "24154f76-bd71-4ef5-81eb-076aeb9a6828",
   "prevId": "3d6a40f8-7ce9-4f96-b2f8-232a8ce69e49",
   "version": "7",
   "dialect": "postgresql",
@@ -821,25 +821,12 @@
           "primaryKey": false,
           "notNull": true
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'accepted'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -1046,6 +1033,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "mfa_last_step": {
+          "name": "mfa_last_step",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "active": {
           "name": "active",

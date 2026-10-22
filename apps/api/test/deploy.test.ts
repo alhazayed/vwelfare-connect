@@ -4,7 +4,7 @@ import { loadConfig } from "../src/config.ts";
 import { setup } from "./helpers.ts";
 
 const key = randomBytes(32).toString("base64");
-const base = { FIELD_ENCRYPTION_KEY: key, DATABASE_URL: "", EMR_BASE_URL: "", MOCK_EMR_URL: "", CRON_SECRET: "", VERCEL: "", VERCEL_ENV: "", EMR_ALLOWED_HOSTS: "" };
+const base = { FIELD_ENCRYPTION_KEY: key, DATABASE_URL: "", EMR_BASE_URL: "", MOCK_EMR_URL: "", CRON_SECRET: "", VERCEL: "", VERCEL_ENV: "", EMR_ALLOWED_HOSTS: "", TRUST_PROXY: "" };
 
 describe("Vercel configuration", () => {
   it("uses the bound mock EMR outside production only", () => {
@@ -23,6 +23,13 @@ describe("Vercel configuration", () => {
     expect(() => loadConfig({ ...base, VERCEL: "1", CRON_SECRET: "s" })).toThrow(/DATABASE_URL/);
     expect(() => loadConfig({ ...base, VERCEL: "1", DATABASE_URL: "postgres://x@db/v" })).toThrow(/CRON_SECRET/);
     expect(loadConfig({ ...base, VERCEL: "1", DATABASE_URL: "postgres://x@db/v", CRON_SECRET: "s" }).DATABASE_URL).toBe("postgres://x@db/v");
+  });
+
+  it("trusts X-Forwarded-For from a local proxy, Vercel's edge, or the listed proxies", () => {
+    const vercel = { ...base, VERCEL: "1", DATABASE_URL: "postgres://x@db/v", CRON_SECRET: "s" };
+    expect(loadConfig(base).TRUST_PROXY).toEqual(["127.0.0.1", "::1"]);
+    expect(loadConfig(vercel).TRUST_PROXY).toBe(true);
+    expect(loadConfig({ ...vercel, TRUST_PROXY: "10.0.0.0/16, 10.1.0.5" }).TRUST_PROXY).toEqual(["10.0.0.0/16", "10.1.0.5"]);
   });
 });
 

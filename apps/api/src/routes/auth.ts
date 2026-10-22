@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, or } from "drizzle-orm";
 import QRCode from "qrcode";
 import { authenticator } from "otplib";
 import { authSessions, invitations, patients, staff } from "../db/schema.ts";
@@ -59,7 +59,8 @@ export function authRoutes(app: FastifyInstance, deps: Deps) {
       }
       throw new HttpError(401, "bad_credentials", "Email or password is incorrect");
     }
-    await deps.db.update(staff).set({ failedLogins: 0, lockedUntil: null }).where(eq(staff.id, s.id));
+    // The failure count is reset only once the authenticator code is right too: a correct password alone
+    // must not give someone with the password a fresh set of code guesses.
     await startSession(deps, reply, "staff", s.id, false);
     return { next: s.mfaEnabled ? "mfa" : "mfa-setup" };
   });
@@ -77,15 +78,40 @@ export function authRoutes(app: FastifyInstance, deps: Deps) {
     return { secret, otpauthUrl, qrDataUrl: await QRCode.toDataURL(otpauthUrl) };
   });
 
-  app.post("/api/auth/staff/mfa", limited, async req => {
+  app.post("/api/auth/staff/mfa", limited, async (req, reply) => {
     const a = req.auth;
     if (!a || a.kind !== "staff") throw new HttpError(401, "not_signed_in");
     const { code } = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
     const fresh = await deps.db.query.staff.findFirst({ where: eq(staff.id, a.staff.id) });
-    if (!fresh?.mfaSecretEnc || !authenticator.check(code, deps.cipher.decrypt(fresh.mfaSecretEnc))) {
-      throw new HttpError(401, "bad_code", "That code didn't match. Check your authenticator app and try again.");
+    if (!fresh?.mfaSecretEnc) throw new HttpError(409, "mfa_not_set_up");
+    if (await checkLock(fresh)) {
+      await endSession(deps, req, reply);
+      throw new HttpError(423, "locked", "Too many attempts. Try again in 15 minutes.");
     }
-    if (!fresh.mfaEnabled) await deps.db.update(staff).set({ mfaEnabled: true }).where(eq(staff.id, fresh.id));
+
+    // Wrong codes count against the account, like wrong passwords, so codes can't be guessed from many addresses.
+    async function fail(err: HttpError): Promise<never> {
+      const failed = fresh!.failedLogins + 1;
+      const lock = failed >= MAX_FAILURES;
+      await deps.db.update(staff).set({ failedLogins: failed, lockedUntil: lock ? new Date(deps.now().getTime() + LOCK_MINUTES * 60_000) : null }).where(eq(staff.id, fresh!.id));
+      await audit(deps, { type: fresh!.role, id: fresh!.id, ip: req.ip }, "sign_in_failed", null, { step: "code" });
+      if (lock) {
+        await endSession(deps, req, reply);
+        throw new HttpError(423, "locked", "Too many attempts. Try again in 15 minutes.");
+      }
+      throw err;
+    }
+
+    // otplib checks codes against the real clock, so the time step is worked out from the real clock too.
+    const delta = authenticator.checkDelta(code, deps.cipher.decrypt(fresh.mfaSecretEnc));
+    if (delta === null) return fail(new HttpError(401, "bad_code", "That code didn't match. Check your authenticator app and try again."));
+    const step = Math.floor(Date.now() / (authenticator.allOptions().step * 1000)) + delta;
+    // Each code works once: claim its time step, so a code seen over someone's shoulder or replayed is refused.
+    const claimed = await deps.db.update(staff)
+      .set({ mfaLastStep: step, mfaEnabled: true, failedLogins: 0, lockedUntil: null })
+      .where(and(eq(staff.id, fresh.id), or(isNull(staff.mfaLastStep), lt(staff.mfaLastStep, step))))
+      .returning({ id: staff.id });
+    if (!claimed.length) return fail(new HttpError(401, "code_used", "That code was already used. Wait for the next code in your authenticator app and enter it."));
     await deps.db.update(authSessions).set({ mfaOk: true }).where(eq(authSessions.id, a.sessionId));
     await audit(deps, { type: fresh.role, id: fresh.id, ip: req.ip }, "signed_in");
     return { ok: true, role: fresh.role };
