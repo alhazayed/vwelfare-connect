@@ -2,6 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 // Fonts are bundled with the app: loading them from a font service would tell it who opens a mental-health app.
+import "@fontsource/outfit/400.css";
+import "@fontsource/outfit/500.css";
+import "@fontsource/outfit/600.css";
 import "@fontsource/alexandria/500.css";
 import "@fontsource/alexandria/600.css";
 import "@fontsource/ibm-plex-sans-arabic/400.css";
