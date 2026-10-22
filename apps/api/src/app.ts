@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import multipart from "@fastify/multipart";
@@ -9,6 +10,7 @@ import { registerAuth } from "./auth.ts";
 import { EmrUnavailable } from "./emr/client.ts";
 import { MAX_FILE_BYTES } from "./lib/files.ts";
 import { patientKey, staffKey } from "./realtime.ts";
+import { workerTick } from "./services/chat.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { secretsRoutes } from "./routes/secrets.ts";
@@ -51,6 +53,18 @@ export async function buildApp(deps: Deps, opts: { logger?: boolean } = {}) {
     if (!a || (a.kind === "staff" && !a.mfaOk)) { socket.close(4401, "not_signed_in"); return; }
     deps.hub.add(a.kind === "staff" ? staffKey(a.staff.id) : patientKey(a.patient.fileNumber), socket);
   });
+
+  // Vercel Cron calls this once a minute in place of the timer in server.ts. Only registered when CRON_SECRET is set.
+  const cronSecret = deps.config.CRON_SECRET;
+  if (cronSecret) {
+    const expected = Buffer.from(`Bearer ${cronSecret}`);
+    app.get("/api/internal/worker", async (req, reply) => {
+      const got = Buffer.from(req.headers.authorization ?? "");
+      if (got.length !== expected.length || !timingSafeEqual(got, expected)) return reply.code(401).send({ code: "unauthorized", message: "Not allowed" });
+      await workerTick(deps);
+      return { ok: true };
+    });
+  }
 
   authRoutes(app, deps);
   adminRoutes(app, deps);
