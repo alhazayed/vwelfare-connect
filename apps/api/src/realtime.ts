@@ -1,7 +1,7 @@
 // Tells open screens that something changed so they reload it. Events carry IDs only, never content.
 import type { WebSocket } from "ws";
 
-export type ChatEvent = { type: "chat"; fileNumber: string; providerId: string } | { type: "consent"; fileNumber: string };
+export type ChatEvent = { type: "chat"; fileNumber: string; providerId: string } | { type: "consent" | "team"; fileNumber: string };
 
 export class Hub {
   private sockets = new Map<string, Set<WebSocket>>();

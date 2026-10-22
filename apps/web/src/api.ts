@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message); }
+  /** `field`: for invalid_input, the first input the server refused. */
+  constructor(public status: number, public code: string, message: string, public field?: string) { super(message); }
 }
 
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
@@ -13,10 +14,10 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
     body: body === undefined ? undefined : isForm ? body : JSON.stringify(body)
   });
   if (!res.ok) {
-    let j: { code?: string; message?: string } = {};
+    let j: { code?: string; message?: string; field?: string } = {};
     try { j = await res.json(); } catch { /* not JSON */ }
     if (res.status === 401 && !path.startsWith("/api/auth/")) window.dispatchEvent(new Event("vw:signed-out"));
-    throw new ApiError(res.status, j.code ?? "error", j.message ?? res.statusText);
+    throw new ApiError(res.status, j.code ?? "error", j.message ?? res.statusText, j.field || undefined);
   }
   return res.json() as Promise<T>;
 }

@@ -17,7 +17,7 @@ export function adminRoutes(app: FastifyInstance, deps: Deps) {
     const rows = await deps.db.select({
       id: staff.id, email: staff.email, nameEn: staff.nameEn, nameAr: staff.nameAr, specialtyEn: staff.specialtyEn, specialtyAr: staff.specialtyAr,
       emrStaffId: staff.emrStaffId, active: staff.active, mfaEnabled: staff.mfaEnabled, hasPassword: sql<boolean>`${staff.passwordHash} is not null`,
-      patients: sql<number>`(select count(*)::int from ${providerPatients} where ${providerPatients.providerId} = ${staff.id})`,
+      patients: sql<number>`(select count(*)::int from ${providerPatients} where ${providerPatients.providerId} = ${staff.id} and ${providerPatients.status} = 'accepted')`,
       openChats: sql<number>`(select count(*)::int from ${chatSessions} where ${chatSessions.providerId} = ${staff.id} and ${chatSessions.status} = 'open')`
     }).from(staff).where(eq(staff.role, "provider")).orderBy(staff.nameEn);
     return rows;
@@ -38,7 +38,7 @@ export function adminRoutes(app: FastifyInstance, deps: Deps) {
     const token = newToken();
     await deps.db.insert(invitations).values({ kind: "staff", subject: p!.id, tokenHash: sha256(token), expiresAt: new Date(deps.now().getTime() + INVITE_HOURS * 3600_000) });
     await deps.notifier.email(body.email, "Your Vwelfare Connect account",
-      `Set your password and sign-in app here (link valid for ${INVITE_HOURS} hours): ${deps.config.APP_BASE_URL}/invite/staff/${token}`);
+      `Set your password and sign-in app here (link valid for ${INVITE_HOURS} hours): ${deps.config.APP_BASE_URL}/invite/staff#${token}`);
     await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "provider_created", p!.id);
     return { id: p!.id };
   });
@@ -47,7 +47,7 @@ export function adminRoutes(app: FastifyInstance, deps: Deps) {
     requireStaff(req, "admin");
     const [row] = await deps.db.select({
       openChats: sql<number>`(select count(*)::int from ${chatSessions} where ${chatSessions.providerId} = ${req.params.id} and ${chatSessions.status} = 'open')`,
-      patients: sql<number>`(select count(*)::int from ${providerPatients} where ${providerPatients.providerId} = ${req.params.id})`
+      patients: sql<number>`(select count(*)::int from ${providerPatients} where ${providerPatients.providerId} = ${req.params.id} and ${providerPatients.status} = 'accepted')`
     }).from(staff).where(eq(staff.id, req.params.id));
     if (!row) throw new HttpError(404, "not_found");
     return row;

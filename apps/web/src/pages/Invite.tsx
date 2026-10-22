@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, type Bilingual } from "../api.ts";
 import { useI18n } from "../i18n.tsx";
 import { TopBar } from "../components/TopBar.tsx";
 import { useToast } from "../components/ui.tsx";
 
+/** Links put the token after "#" so it never reaches a server. Older links had it in the path. */
+function useInviteToken() {
+  const { token: inPath } = useParams();
+  const { hash } = useLocation();
+  return inPath ?? decodeURIComponent(hash.slice(1));
+}
+
 export function StaffInvite() {
-  const { token = "" } = useParams();
+  const token = useInviteToken();
   const { t, errText } = useI18n();
   const toast = useToast();
   const navigate = useNavigate();
@@ -15,7 +22,7 @@ export function StaffInvite() {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
 
-  useEffect(() => { api<{ email: string }>("GET", `/api/auth/invite/staff/${encodeURIComponent(token)}`).then(setInfo, e => setErr(errText(e))); }, [token, errText]);
+  useEffect(() => { api<{ email: string }>("POST", "/api/auth/invite/staff", { token }).then(setInfo, e => setErr(errText(e))); }, [token, errText]);
 
   return (
     <>
@@ -44,7 +51,7 @@ export function StaffInvite() {
 }
 
 export function PatientInvite({ onDone }: { onDone: () => Promise<void> }) {
-  const { token = "" } = useParams();
+  const token = useInviteToken();
   const { t, L, errText } = useI18n();
   const navigate = useNavigate();
   const [info, setInfo] = useState<{ invitedBy: Bilingual | null } | null>(null);
@@ -53,7 +60,7 @@ export function PatientInvite({ onDone }: { onDone: () => Promise<void> }) {
   const [f, setF] = useState({ username: "", pw: "", pw2: "", terms: false });
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { api<{ invitedBy: Bilingual | null }>("GET", `/api/auth/invite/patient/${encodeURIComponent(token)}`).then(setInfo, e => setLoadErr(errText(e))); }, [token, errText]);
+  useEffect(() => { api<{ invitedBy: Bilingual | null }>("POST", "/api/auth/invite/patient", { token }).then(setInfo, e => setLoadErr(errText(e))); }, [token, errText]);
 
   return (
     <>

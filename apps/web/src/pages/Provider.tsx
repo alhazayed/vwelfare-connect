@@ -4,7 +4,7 @@ import { useI18n } from "../i18n.tsx";
 import { Dialog, Icon, Tabs, useAsync, useToast } from "../components/ui.tsx";
 import { Composer, RecordViewer, Thread, fileForm, useAwayBlur } from "../components/chat.tsx";
 
-type PatientRow = { fileNumber: string; status: "invited" | "active" | "deactivated"; name: Bilingual | null; openChat: boolean; lastFrom: string | null; risk: boolean; waitingForEmr: boolean };
+type PatientRow = { fileNumber: string; status: "invited" | "active" | "deactivated"; link: "pending" | "accepted" | "declined"; name: Bilingual | null; openChat: boolean; lastFrom: string | null; risk: boolean; waitingForEmr: boolean };
 type Detail = { fileNumber: string; status: string; name: Bilingual | null; visits: string[]; invitedTo: string | null };
 type ChatState = { open: ChatSession | null; waitingForEmr: boolean; autoFinishHours: number };
 type Records = { mine: RecordSummary[]; others: RecordSummary[]; consent: "pending" | "granted" | "denied" | "withdrawn" | null };
@@ -23,6 +23,7 @@ export function ProviderPage({ me }: { me: Extract<Me, { kind: "staff" }> }) {
   useEffect(() => { if (!sel && patients.length) setSel(patients[0]!.fileNumber); }, [patients, sel]);
 
   const open = (f: string) => { setSel(f); setView("pane"); };
+  const selRow = patients.find(p => p.fileNumber === sel);
 
   return (
     <>
@@ -40,7 +41,9 @@ export function ProviderPage({ me }: { me: Extract<Me, { kind: "staff" }> }) {
                   <span className="pt-name">{p.name ? L(p.name) : "—"}</span>
                   <span className="pt-meta">
                     <span className="mono">{p.fileNumber}</span>
-                    {p.status === "invited" && <span className="pill warn">{t("awaiting")}</span>}
+                    {p.link === "pending" && <span className="pill warn">{t("linkPending")}</span>}
+                    {p.link === "declined" && <span className="pill">{t("linkDeclined")}</span>}
+                    {p.link === "accepted" && p.status === "invited" && <span className="pill warn">{t("awaiting")}</span>}
                     {p.waitingForEmr && <span className="pill warn">{t("waitSync")}</span>}
                     {p.risk && <span className="pill danger">{t("riskPill")}</span>}
                     {p.openChat && (p.lastFrom === "patient" ? <span className="pill new">{t("newMsg")}</span> : <span className="pill ok">{t("chatOpen")}</span>)}
@@ -52,11 +55,28 @@ export function ProviderPage({ me }: { me: Extract<Me, { kind: "staff" }> }) {
           </ul>
         </aside>
         <section className="card pane">
-          {sel ? <PatientPane key={sel} file={sel} me={me} version={version} onBack={() => setView("list")} onChanged={() => setVersion(v => v + 1)} />
-            : <div className="empty">{t("pickPatient")}</div>}
+          {!sel ? <div className="empty">{t("pickPatient")}</div>
+            : selRow && selRow.link !== "accepted" ? <LinkWaiting file={sel} link={selRow.link} onBack={() => setView("list")} />
+            : <PatientPane key={sel} file={sel} me={me} version={version} onBack={() => setView("list")} onChanged={() => setVersion(v => v + 1)} />}
         </section>
       </div>
       {adding && <AddPatientDialog onClose={() => setAdding(false)} onOpen={f => { setAdding(false); setVersion(v => v + 1); open(f); }} />}
+    </>
+  );
+}
+
+/** A patient who hasn't accepted this provider yet: the file stays closed. */
+function LinkWaiting({ file, link, onBack }: { file: string; link: "pending" | "declined"; onBack: () => void }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <header className="pane-head">
+        <div className="pane-top">
+          <button type="button" className="icon-btn back" onClick={onBack} aria-label={t("back")}>{Icon.back}</button>
+          <div className="who"><h2 className="mono">{file}</h2></div>
+        </div>
+      </header>
+      <div className="pane-body"><div className="empty">{t(link === "pending" ? "linkPendingNote" : "linkDeclinedNote")}</div></div>
     </>
   );
 }
@@ -198,7 +218,7 @@ function AddPatientDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (f
   const [mobile, setMobile] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [found, setFound] = useState<{ fileNumber: string; name: Bilingual; visits: string[]; onPlatform: boolean; mine: boolean } | null>(null);
+  const [found, setFound] = useState<{ fileNumber: string; name: Bilingual; visits: string[]; onPlatform: boolean; mine: boolean; request: "pending" | "declined" | null } | null>(null);
 
   const lookup = async () => {
     setBusy(true); setErr(""); setFound(null);
@@ -208,8 +228,8 @@ function AddPatientDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (f
     if (!found) return;
     setBusy(true); setErr("");
     try {
-      const r = await api<{ status: "linked" | "invited" }>("POST", "/api/provider/patients", { fileNumber: found.fileNumber, mobile: found.onPlatform ? undefined : mobile });
-      toast(t(r.status === "invited" ? "patientInvited" : "patientLinked", { name: L(found.name) }));
+      const r = await api<{ status: "linked" | "invited" | "pending" }>("POST", "/api/provider/patients", { fileNumber: found.fileNumber, mobile: found.onPlatform ? undefined : mobile });
+      toast(t(r.status === "invited" ? "patientInvited" : r.status === "pending" ? "requestSent" : "patientLinked", { name: L(found.name) }));
       onOpen(found.fileNumber);
     } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
   };
@@ -229,6 +249,7 @@ function AddPatientDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (f
           </dl>
         </div>
         {found.mine ? <><p className="note">{t("alreadyMine", { name: L(found.name) })}</p><div className="actions"><button className="btn primary" onClick={() => onOpen(found.fileNumber)}>{t("openPatient")}</button></div></>
+          : found.request === "pending" ? <p className="note">{t("requestPending", { name: L(found.name) })}</p>
           : found.onPlatform ? <><p className="note">{t("alreadyOnPlatform", { name: L(found.name) })}</p><div className="actions"><button className="btn primary" disabled={busy} onClick={create}>{t("linkPatient")}</button></div></>
           : <form className="stack" onSubmit={e => { e.preventDefault(); void create(); }}>
               <label className="fld"><span>{t("mobileLabel")}</span><input type="tel" dir="ltr" autoComplete="off" value={mobile} onChange={e => setMobile(e.target.value)} /><small className="muted">{t("mobileHint")}</small></label>

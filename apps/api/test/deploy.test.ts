@@ -4,13 +4,19 @@ import { loadConfig } from "../src/config.ts";
 import { setup } from "./helpers.ts";
 
 const key = randomBytes(32).toString("base64");
-const base = { FIELD_ENCRYPTION_KEY: key, DATABASE_URL: "", EMR_BASE_URL: "", MOCK_EMR_URL: "", CRON_SECRET: "", VERCEL: "", VERCEL_ENV: "", TRUST_PROXY: "" };
+const base = { FIELD_ENCRYPTION_KEY: key, DATABASE_URL: "", EMR_BASE_URL: "", MOCK_EMR_URL: "", CRON_SECRET: "", VERCEL: "", VERCEL_ENV: "", EMR_ALLOWED_HOSTS: "", TRUST_PROXY: "" };
 
 describe("Vercel configuration", () => {
   it("uses the bound mock EMR outside production only", () => {
     expect(loadConfig({ ...base, MOCK_EMR_URL: "http://mock.internal" }).EMR_BASE_URL).toBe("http://mock.internal");
     expect(loadConfig({ ...base, MOCK_EMR_URL: "http://mock.internal", EMR_BASE_URL: "https://emr.example" }).EMR_BASE_URL).toBe("https://emr.example");
     expect(() => loadConfig({ ...base, VERCEL_ENV: "production", MOCK_EMR_URL: "http://mock.internal" })).toThrow(/EMR_BASE_URL/);
+    expect(() => loadConfig({ ...base, VERCEL_ENV: "production", EMR_BASE_URL: "http://emr.example" })).toThrow(/https/);
+  });
+
+  it("allows only the environment's EMR host unless EMR_ALLOWED_HOSTS lists more", () => {
+    expect(loadConfig({ ...base, EMR_BASE_URL: "https://emr.example:8443/api" }).EMR_ALLOWED_HOSTS).toEqual(["emr.example:8443"]);
+    expect(loadConfig({ ...base, EMR_BASE_URL: "https://emr.example", EMR_ALLOWED_HOSTS: "emr.example, EMR-DR.example" }).EMR_ALLOWED_HOSTS).toEqual(["emr.example", "emr-dr.example"]);
   });
 
   it("refuses to start on Vercel without a real database and a cron secret", () => {

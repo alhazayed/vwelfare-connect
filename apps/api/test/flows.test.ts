@@ -25,7 +25,15 @@ describe("staff accounts", () => {
     const admin = await env.staffClient("admin@vwelfare.test");
     await admin.ok("POST", "/api/admin/providers", { nameEn: "Dr. New", specialtyEn: "Psychiatrist", email: "new@vwelfare.test", emrStaffId: "ST-9999" });
     const email = env.notifier.sent.find(s => s.channel === "email" && s.to === "new@vwelfare.test")!;
-    await new Client(env.app).ok("POST", "/api/auth/staff/accept-invite", { token: inviteToken(email.text), password: PASSWORD });
+    // The token sits after "#", so it never reaches a server log; the app sends it in a request body.
+    expect(email.text).toMatch(/\/invite\/staff#/);
+    const token = inviteToken(email.text);
+    const anon = new Client(env.app);
+    expect((await anon.ok("POST", "/api/auth/invite/staff", { token })).email).toBe("new@vwelfare.test");
+    expect((await anon.req("GET", `/api/auth/invite/staff/${token}`)).statusCode).toBe(404);
+    await anon.ok("POST", "/api/auth/staff/accept-invite", { token, password: PASSWORD });
+    expect((await anon.req("POST", "/api/auth/invite/staff", { token })).statusCode).toBe(410); // used once only
+    expect((await anon.req("POST", "/api/auth/staff/accept-invite", { token, password: PASSWORD })).statusCode).toBe(410);
 
     const p = new Client(env.app);
     expect((await p.ok("POST", "/api/auth/staff/login", { email: "new@vwelfare.test", password: PASSWORD })).next).toBe("mfa-setup");
@@ -35,9 +43,51 @@ describe("staff accounts", () => {
     expect((await p.req("GET", "/api/provider/patients")).statusCode).toBe(200);
   });
 
+  it("names the refused field and the rate limit in error codes the app can translate", async () => {
+    const anon = new Client(env.app);
+    const bad = await anon.req("POST", "/api/auth/patient/accept-invite", { token: "x", username: "a!", password: "longenough", acceptTerms: true });
+    expect(bad.json()).toMatchObject({ code: "invalid_input", field: "username" });
+    let last = 0;
+    for (let i = 0; i < 11; i++) last = (await anon.req("POST", "/api/auth/patient/login", { username: "nobody", password: "wrong" })).statusCode;
+    expect(last).toBe(429);
+    expect((await anon.req("POST", "/api/auth/patient/login", { username: "nobody", password: "wrong" })).json().code).toBe("rate_limited");
+  });
+
   it("rejects requests without the app header", async () => {
     const res = await env.app.inject({ method: "POST", url: "/api/auth/patient/login", payload: { username: "x", password: "y" } });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("browser protection", () => {
+  it("sends API responses that can't run, load or be framed", async () => {
+    const res = await env.app.inject({ method: "GET", url: "/api/health" });
+    expect(res.headers["content-security-policy"]).toBe("default-src 'none'; frame-ancestors 'none'");
+    expect(res.headers["x-frame-options"]).toBe("DENY");
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["cache-control"]).toBe("no-store");
+  });
+
+  it("serves past-chat files only as a shareable type", async () => {
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    const patient = await onboardPatient(sara, "10633", "mariam.s");
+    const pid = (await patient.ok("GET", "/api/patient/me")).team[0].id;
+    await patient.upload(`/api/patient/providers/${pid}/chat/files`, "sleep-log.pdf", Buffer.from("%PDF-1.4 sleep log"));
+    await sara.ok("POST", "/api/provider/patients/10633/chat/finish");
+
+    const rec = (await patient.ok<any[]>("GET", `/api/patient/providers/${pid}/records`)).find(r => r.recordName === "10633_2026-10-21_09-00");
+    const view = await patient.ok("GET", `/api/patient/records/${rec.recordId}`);
+    const url = `/api/patient/records/${rec.recordId}/attachments/${view.attachments[0].id}`;
+    const ok = await patient.req("GET", url);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.headers["content-type"]).toBe("application/pdf");
+    expect(ok.headers["content-security-policy"]).toContain("script-src 'none'");
+    expect(ok.headers["cache-control"]).toBe("no-store");
+
+    // If the EMR reports a type that could run in the browser, the file isn't served.
+    env.emr.records.find(r => r.recordId === rec.recordId)!.attachments[0]!.mimeType = "text/html";
+    expect((await patient.req("GET", url)).statusCode).toBe(415);
   });
 });
 
@@ -268,6 +318,58 @@ describe("EMR failures", () => {
     minutes(30);
     await workerTick(env.deps);
     expect(await env.deps.db.select().from(chatSessions)).toHaveLength(0);
+  });
+});
+
+describe("care team", () => {
+  it("adds a provider to an existing patient's care team only when the patient accepts", async () => {
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    await env.createStaff("provider", "omar@vwelfare.test", { emrStaffId: "ST-0207", nameEn: "Omar Khalil" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    let omar = await env.staffClient("omar@vwelfare.test");
+    let patient = await onboardPatient(sara, "10482", "layla.h");
+    const smsBefore = env.notifier.sent.filter(m => m.channel === "sms").length;
+
+    expect(await omar.ok("POST", "/api/provider/patients", { fileNumber: "10482" })).toEqual({ status: "pending" });
+    const sms = env.notifier.sent.filter(m => m.channel === "sms");
+    expect(sms).toHaveLength(smsBefore + 1);
+    expect(sms.at(-1)!.text).not.toMatch(/Omar|Khalil|Layla/);
+
+    // Nothing is open to Omar while the request waits.
+    const listed = (await omar.ok<any[]>("GET", "/api/provider/patients"))[0];
+    expect(listed).toMatchObject({ fileNumber: "10482", link: "pending", name: null });
+    expect((await omar.req("GET", "/api/provider/patients/10482")).statusCode).toBe(404);
+    expect((await omar.req("POST", "/api/provider/patients/10482/chat")).statusCode).toBe(404);
+    expect((await omar.req("POST", "/api/provider/patients/10482/consent-request")).statusCode).toBe(404);
+    let me = await patient.ok("GET", "/api/patient/me");
+    expect(me.team).toHaveLength(1);
+    const omarId = me.teamRequests[0].providerId;
+    expect(me.teamRequests[0].name.en).toBe("Omar Khalil");
+    expect((await patient.req("POST", `/api/patient/providers/${omarId}/chat/messages`, { text: "hi" })).statusCode).toBe(404);
+
+    // Declined: Omar can't ask again for 7 days.
+    await patient.ok("POST", `/api/patient/team-requests/${omarId}`, { answer: "declined" });
+    expect((await patient.req("POST", `/api/patient/team-requests/${omarId}`, { answer: "accepted" })).json().code).toBe("no_pending_request");
+    expect((await omar.req("POST", "/api/provider/patients", { fileNumber: "10482" })).json().code).toBe("link_declined");
+    env.clock.now = new Date(env.clock.now.getTime() + 8 * 86_400_000);
+    omar = await env.staffClient("omar@vwelfare.test");
+    patient = new Client(env.app);
+    await patient.ok("POST", "/api/auth/patient/login", { username: "layla.h", password: PASSWORD });
+    expect(await omar.ok("POST", "/api/provider/patients", { fileNumber: "10482" })).toEqual({ status: "pending" });
+
+    // Accepted: Omar joins the care team.
+    await patient.ok("POST", `/api/patient/team-requests/${omarId}`, { answer: "accepted" });
+    me = await patient.ok("GET", "/api/patient/me");
+    expect(me.team.map((p: any) => p.id)).toContain(omarId);
+    expect(me.teamRequests).toEqual([]);
+    expect((await omar.req("GET", "/api/provider/patients/10482")).statusCode).toBe(200);
+  });
+
+  it("limits patient lookups for each provider", async () => {
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    for (let i = 0; i < 30; i++) expect((await sara.req("POST", "/api/provider/lookup", { fileNumber: "10633" })).statusCode).toBe(200);
+    expect((await sara.req("POST", "/api/provider/lookup", { fileNumber: "10633" })).json().code).toBe("rate_limited");
   });
 });
 

@@ -42,7 +42,7 @@ These come from the center's decisions and are covered by tests. Don't weaken th
 - **Nothing stays after sync:** when the EMR confirms a chat (`201`/`200`), its messages, attachments, files and session are deleted in one transaction (`syncSession`). Finished chats are only ever read back from the EMR.
 - **Exactly-once save:** the chat ID is the EMR `Idempotency-Key`; the request path and the worker take turns through the `nextAttemptAt` lease. A locked chat never accepts new messages.
 - **Record name:** `{fileNumber}_{YYYY-MM-DD}_{HH-mm}` in `CENTER_TIMEZONE`, with `_2`, `_3`… when taken (also checked against the EMR's existing names).
-- **Access:** providers reach only linked patients; another provider's chats need the patient's granted consent (`checkRecordAccess`); the super admin never sees chat content; staff need MFA (`mfaOk`) for everything.
+- **Access:** providers reach only linked patients, and a provider who adds a patient already on the platform is linked only after the patient accepts; another provider's chats need the patient's granted consent (`checkRecordAccess`); the super admin never sees chat content; staff need MFA (`mfaOk`) for everything.
 - **Encryption:** message text, mobile numbers, MFA secrets, saved secrets and stored files go through `FieldCipher` (AES-256-GCM).
 - **No content in logs or notifications:** the audit log records actions by name, file number or record name, never message text, patient names or secret values. SMS and push texts never include names, providers or message text.
 - **Read-only past chats:** served with `cache-control: no-store`; the viewer blocks copy, print and download, shows a watermark and blurs when the window loses focus.

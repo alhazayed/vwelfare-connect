@@ -30,6 +30,19 @@ export const CATALOG: Array<{ name: string; group: Group; isSecret: boolean; con
 export const CUSTOM_NAME = /^[A-Z][A-Z0-9_]{2,63}$/;
 const known = (name: string) => CATALOG.find(c => c.name === name);
 
+/**
+ * Chats and patient lookups go wherever EMR_BASE_URL points, so a saved address must be on the
+ * EMR_ALLOWED_HOSTS list from the server's environment (and use https in production).
+ */
+export function emrUrlProblem(value: string, config: Pick<Config, "EMR_ALLOWED_HOSTS" | "production">): "bad_url" | "emr_host_not_allowed" | "emr_https_required" | null {
+  let u: URL;
+  try { u = new URL(value); } catch { return "bad_url"; }
+  if (!["http:", "https:"].includes(u.protocol)) return "bad_url";
+  if (config.production && u.protocol !== "https:") return "emr_https_required";
+  const host = u.host.toLowerCase(), hostname = u.hostname.toLowerCase();
+  return config.EMR_ALLOWED_HOSTS.some(h => h === host || h === hostname) ? null : "emr_host_not_allowed";
+}
+
 export class SecretStore {
   private cache: Map<string, { value: string; row: typeof secrets.$inferSelect }> | null = null;
 
@@ -87,6 +100,7 @@ export class SecretStore {
     const k = known(name);
     if (!k && !CUSTOM_NAME.test(name)) return "bad_name";
     if (value.length > 4000) return "too_long";
+    if (name === "EMR_BASE_URL") return emrUrlProblem(value, this.config);
     if (k?.kind === "url") {
       try { const u = new URL(value); if (!["http:", "https:"].includes(u.protocol)) return "bad_url"; } catch { return "bad_url"; }
     }

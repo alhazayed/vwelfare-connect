@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { HttpError, type Deps } from "../deps.ts";
-import { allowedMime } from "../lib/files.ts";
+import { ALLOWED_TYPES, allowedMime } from "../lib/files.ts";
 import type { EmrRecord } from "../emr/client.ts";
 
 export async function readUpload(deps: Deps, req: FastifyRequest) {
@@ -14,10 +14,19 @@ export async function readUpload(deps: Deps, req: FastifyRequest) {
   return { name, mimeType, content };
 }
 
-/** Streams a file for read-only viewing: inline, never cached. */
+const SHAREABLE = new Set(Object.values(ALLOWED_TYPES));
+
+/**
+ * Streams a file for read-only viewing: inline, never cached. Only the shareable types are sent: any other type (for example
+ * one the EMR reports differently) is refused, so a browser never renders it as a page.
+ * The CSP allows the browser's own PDF, image and audio viewers but no scripts or framing.
+ */
 export function sendProtectedFile(reply: FastifyReply, mimeType: string, content: Buffer) {
+  const type = mimeType.split(";")[0]!.trim().toLowerCase();
+  if (!SHAREABLE.has(type)) throw new HttpError(415, "file_type", "This file can't be shown.");
   return reply
-    .header("content-type", mimeType)
+    .header("content-type", type)
+    .header("content-security-policy", "frame-ancestors 'none'; script-src 'none'")
     .header("content-disposition", "inline")
     .header("cache-control", "no-store")
     .header("x-content-type-options", "nosniff")

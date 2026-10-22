@@ -96,7 +96,9 @@ These are deliberately not finished. Each needs a decision or a service from Vwe
 
 Vercel Cron calls `GET /api/internal/worker` every minute (reminders, automatic finishes, EMR retries) instead of the timer `npm run dev` uses. Every-minute schedules need a Pro plan.
 
-Set these in the Vercel project's environment variables: `FIELD_ENCRYPTION_KEY`, `DATABASE_URL` (PostgreSQL; the API refuses to start on Vercel without it), `CRON_SECRET`, `APP_BASE_URL` (the deployment's address), `CENTER_TIMEZONE`, `COOKIE_SECURE=true`, and in production `EMR_BASE_URL`, `EMR_CLIENT_ID`, `EMR_CLIENT_SECRET`. Don't set `MOCK_EMR_URL`; Vercel fills it in.
+Set these in the Vercel project's environment variables: `FIELD_ENCRYPTION_KEY`, `DATABASE_URL` (PostgreSQL; the API refuses to start on Vercel without it), `CRON_SECRET`, `APP_BASE_URL` (the deployment's address), `CENTER_TIMEZONE`, `COOKIE_SECURE=true`, and in production `EMR_BASE_URL` (https), `EMR_CLIENT_ID`, `EMR_CLIENT_SECRET`, plus `EMR_ALLOWED_HOSTS` if the super admin may switch the EMR to another host (for example a disaster-recovery address).
+
+`vercel.json` also sets the web app's security headers (a strict Content-Security-Policy, no framing, HSTS). To check a change against them, run `npm run build -w @vwelfare/web` and then `npx vite preview` in `apps/web`, which serves the build with the same headers. Don't set `MOCK_EMR_URL`; Vercel fills it in.
 
 Not ready for real patients on Vercel yet:
 

@@ -41,7 +41,7 @@ export async function setup() {
   const deps: Deps = {
     db, config, files, notifier, cipher, secrets,
     scanner: noScan,
-    emr: emrFromSecrets(secrets),
+    emr: emrFromSecrets(secrets, config),
     hub: new Hub(),
     now: () => clock.now
   };
@@ -106,7 +106,7 @@ export class Client {
 }
 
 export function inviteToken(text: string) {
-  const m = text.match(/\/invite\/(?:patient|staff)\/([A-Za-z0-9_-]+)/);
+  const m = text.match(/\/invite\/(?:patient|staff)#([A-Za-z0-9_-]+)/);
   if (!m) throw new Error(`No invitation link in: ${text}`);
   return m[1]!;
 }

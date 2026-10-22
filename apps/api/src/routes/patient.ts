@@ -14,8 +14,10 @@ import { readUpload, recordView, sendProtectedFile } from "./util.ts";
 export function patientRoutes(app: FastifyInstance, deps: Deps) {
   const actor = (file: string, ip: string) => ({ type: "patient" as const, id: file, ip });
 
-  async function teamOf(file: string) {
-    const links = await deps.db.select({ id: providerPatients.providerId }).from(providerPatients).where(eq(providerPatients.fileNumber, file));
+  /** Active providers linked to the patient: the care team ("accepted"), or the providers waiting for an answer ("pending"). */
+  async function teamOf(file: string, status: "accepted" | "pending" = "accepted") {
+    const links = await deps.db.select({ id: providerPatients.providerId }).from(providerPatients)
+      .where(and(eq(providerPatients.fileNumber, file), eq(providerPatients.status, status)));
     if (!links.length) return [];
     return deps.db.select().from(staff).where(and(inArray(staff.id, links.map(l => l.id)), eq(staff.active, true)));
   }
@@ -28,9 +30,10 @@ export function patientRoutes(app: FastifyInstance, deps: Deps) {
 
   app.get("/api/patient/me", async req => {
     const me = requirePatient(req);
-    const [name, team, rules, cons, sessions] = await Promise.all([
+    const [name, team, requests, rules, cons, sessions] = await Promise.all([
       deps.emr.getPatientName(me.fileNumber).catch(() => null),
       teamOf(me.fileNumber),
+      teamOf(me.fileNumber, "pending"),
       getRules(deps),
       deps.db.select().from(consents).where(eq(consents.fileNumber, me.fileNumber)),
       deps.db.select().from(chatSessions).where(and(eq(chatSessions.fileNumber, me.fileNumber), eq(chatSessions.status, "open")))
@@ -45,8 +48,22 @@ export function patientRoutes(app: FastifyInstance, deps: Deps) {
         id: p.id, name: { en: p.nameEn, ar: p.nameAr }, specialty: { en: p.specialtyEn, ar: p.specialtyAr },
         openChat: sessions.some(s => s.providerId === p.id)
       })),
-      consents: cons.filter(c => team.some(p => p.id === c.providerId)).map(c => ({ providerId: c.providerId, status: c.status }))
+      consents: cons.filter(c => team.some(p => p.id === c.providerId)).map(c => ({ providerId: c.providerId, status: c.status })),
+      teamRequests: requests.map(p => ({ providerId: p.id, name: { en: p.nameEn, ar: p.nameAr }, specialty: { en: p.specialtyEn, ar: p.specialtyAr } }))
     };
+  });
+
+  /** The patient accepts or declines a provider who asked to join their care team. */
+  app.post<{ Params: { pid: string } }>("/api/patient/team-requests/:pid", async req => {
+    const me = requirePatient(req);
+    const { answer } = z.object({ answer: z.enum(["accepted", "declined"]) }).parse(req.body);
+    const decided = await deps.db.update(providerPatients).set({ status: answer, decidedAt: deps.now() })
+      .where(and(eq(providerPatients.fileNumber, me.fileNumber), eq(providerPatients.providerId, req.params.pid), eq(providerPatients.status, "pending")))
+      .returning({ id: providerPatients.providerId });
+    if (!decided.length) throw new HttpError(409, "no_pending_request");
+    await audit(deps, actor(me.fileNumber, req.ip), answer === "accepted" ? "care_team_accepted" : "care_team_declined", req.params.pid);
+    deps.hub.publish([staffKey(req.params.pid)], { type: "team", fileNumber: me.fileNumber });
+    return { status: answer };
   });
 
   app.get<{ Params: { pid: string } }>("/api/patient/providers/:pid/chat", async req => {

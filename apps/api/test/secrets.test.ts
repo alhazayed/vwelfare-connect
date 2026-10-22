@@ -95,4 +95,38 @@ describe("secrets list", () => {
     expect(await a.ok("POST", "/api/admin/secrets/test/emr")).toEqual({ ok: true });
     expect((await sara.req("POST", "/api/provider/lookup", { fileNumber: "10633" })).statusCode).toBe(200);
   });
+
+  it("only accepts an EMR address on the allowed list, and alerts every admin when EMR settings change", async () => {
+    const a = await admin();
+    await env.createStaff("admin", "second-admin@vwelfare.test");
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    await a.ok("POST", "/api/admin/vault/setup", { password: VAULT_PW });
+
+    const bad = await a.req("PUT", "/api/admin/secrets/EMR_BASE_URL", { value: "https://collector.example" });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().code).toBe("emr_host_not_allowed");
+    expect(env.notifier.sent.filter(m => m.channel === "email")).toHaveLength(0);
+
+    // The allowed host (the one in the environment) can be saved; both admins are told, by setting name only.
+    await a.ok("PUT", "/api/admin/secrets/EMR_BASE_URL", { value: env.deps.config.EMR_BASE_URL });
+    const mails = env.notifier.sent.filter(m => m.channel === "email");
+    expect(mails.map(m => m.to).sort()).toEqual(["admin@vwelfare.test", "second-admin@vwelfare.test"]);
+    expect(mails[0]!.text).toContain("EMR_BASE_URL");
+    expect(mails[0]!.text).not.toContain(env.deps.config.EMR_BASE_URL);
+
+    // A value that got into the table some other way is still never used.
+    await env.deps.db.update(secrets).set({ valueEnc: env.deps.cipher.encrypt("https://collector.example") });
+    await env.deps.secrets.set("EMR_CLIENT_ID", "test-client", { by: (await env.deps.db.query.staff.findFirst())!.id, now: env.clock.now });
+    expect((await a.ok("POST", "/api/admin/secrets/test/emr")).ok).toBe(false);
+    expect((await sara.req("POST", "/api/provider/lookup", { fileNumber: "10633" })).statusCode).toBe(503);
+  });
+
+  it("requires https for the EMR in production", async () => {
+    const { emrUrlProblem } = await import("../src/services/secrets.ts");
+    const cfg = { EMR_ALLOWED_HOSTS: ["emr.vendor.example"], production: true };
+    expect(emrUrlProblem("http://emr.vendor.example", cfg)).toBe("emr_https_required");
+    expect(emrUrlProblem("https://emr.vendor.example/api", cfg)).toBeNull();
+    expect(emrUrlProblem("https://emr.vendor.example.evil.test", cfg)).toBe("emr_host_not_allowed");
+  });
 });
