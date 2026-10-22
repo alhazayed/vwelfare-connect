@@ -19,8 +19,11 @@ const migrationsFolder = fileURLToPath(new URL("./migrations", import.meta.url))
  */
 export async function openDb(opts: { databaseUrl?: string; dataDir: string }): Promise<{ db: Db; close: () => Promise<void> }> {
   if (opts.databaseUrl) {
-    const pool = new pg.Pool({ connectionString: opts.databaseUrl });
+    // Fail fast instead of hanging when the database can't be reached.
+    const pool = new pg.Pool({ connectionString: opts.databaseUrl, connectionTimeoutMillis: 5_000 });
     const db = drizzlePg(pool, { schema });
+    await pool.query("select 1");
+    console.log("Database connected; running migrations");
     await migratePg(db, { migrationsFolder });
     return { db: db as unknown as Db, close: () => pool.end() };
   }
