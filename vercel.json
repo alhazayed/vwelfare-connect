@@ -25,13 +25,7 @@
       "routes": [
         {
           "src": "/(staff|admin|provider|patient|invite/.*)",
-          "transforms": [
-            {
-              "type": "request.path",
-              "op": "set",
-              "args": "/index.html"
-            }
-          ]
+          "dest": "/index.html"
         }
       ]
     }
