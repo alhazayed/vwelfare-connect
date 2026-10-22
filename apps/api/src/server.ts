@@ -8,8 +8,9 @@ await app.listen({ port: deps.config.API_PORT, host: "127.0.0.1" });
 app.log.info(`Center time zone: ${deps.config.CENTER_TIMEZONE}`);
 
 // Reminders, automatic finishes and EMR retries.
+// On Vercel there is no long-running process: Vercel Cron calls GET /api/internal/worker instead.
 let running = false;
-const timer = setInterval(async () => {
+const timer = process.env.VERCEL ? undefined : setInterval(async () => {
   if (running) return;
   running = true;
   try { await workerTick(deps); } catch (e) { app.log.error(e, "worker tick failed"); } finally { running = false; }

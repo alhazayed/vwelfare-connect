@@ -84,6 +84,28 @@ These are deliberately not finished. Each needs a decision or a service from Vwe
 - [ ] **Clinical review.** Crisis wording, risk-word list, response-time promise, consent text.
 - [ ] **Backups.** Decide the retention period (backups briefly contain open chats).
 
+## Deploying on Vercel
+
+`vercel.json` deploys the repository as one Vercel project with three services:
+
+| Service | Public path | What it is |
+| --- | --- | --- |
+| `web` | everything except `/api` | The React app (Vite build). |
+| `api` | `/api/*` | The Fastify API, run as a function. Its routes already start with `/api`, so no path rewriting is needed. |
+| `mock-emr` | none (internal) | The stand-in EMR. Only `api` can reach it, through a binding that injects `MOCK_EMR_URL`. The API ignores it in production (`VERCEL_ENV=production`) and requires a real `EMR_BASE_URL` there. |
+
+Vercel Cron calls `GET /api/internal/worker` every minute (reminders, automatic finishes, EMR retries) instead of the timer `npm run dev` uses. Every-minute schedules need a Pro plan.
+
+Set these in the Vercel project's environment variables: `FIELD_ENCRYPTION_KEY`, `DATABASE_URL` (PostgreSQL; the API refuses to start on Vercel without it), `CRON_SECRET`, `APP_BASE_URL` (the deployment's address), `CENTER_TIMEZONE`, `COOKIE_SECURE=true`, and in production `EMR_BASE_URL`, `EMR_CLIENT_ID`, `EMR_CLIENT_SECRET`. Don't set `MOCK_EMR_URL`; Vercel fills it in.
+
+Not ready for real patients on Vercel yet:
+
+- Attachments use the encrypted-disk store, and functions don't keep their disk. File uploads need cloud object storage first.
+- Live updates (`/api/ws`) are kept in each function instance's memory, so a screen connected to another instance can miss them. They need a shared channel (for example Redis pub/sub) before launch.
+- Choose the function region to match the EMR and the center's data-residency rules.
+
+Run all three services together locally with `vercel dev`.
+
 ## Useful commands
 
 | Command | What it does |
