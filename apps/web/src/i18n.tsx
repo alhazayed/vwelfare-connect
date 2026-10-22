@@ -91,6 +91,7 @@ const en = {
   err_email_taken: "A provider with this email already exists.", err_bad_mobile: "Enter a mobile number with at least 8 digits.",
   err_FST_REQ_FILE_TOO_LARGE: "This file is larger than 10 MB.", err_generic: "Something went wrong. Try again.",
   err_retry_soon: "This chat is being sent now or will be tried again within 2 minutes.",
+  err_code_used: "That code was already used. Wait for the next code in your authenticator app and enter it.",
   kb: "KB", mb: "MB", hm: "{h}h {m}m"
 };
 
@@ -181,6 +182,7 @@ const ar: Record<Key, string> = {
   err_email_taken: "يوجد مقدم رعاية بهذا البريد بالفعل.", err_bad_mobile: "أدخل رقم جوال من 8 أرقام على الأقل.",
   err_FST_REQ_FILE_TOO_LARGE: "حجم الملف أكبر من 10 ميجابايت.", err_generic: "حدث خطأ. حاول مرة أخرى.",
   err_retry_soon: "يجري إرسال هذه المحادثة الآن أو ستُعاد المحاولة خلال دقيقتين.",
+  err_code_used: "استُخدم هذا الرمز من قبل. يُرجى انتظار الرمز التالي في تطبيق المصادقة وإدخاله.",
   kb: "ك.ب", mb: "م.ب", hm: "{h} س {m} د"
 };
 

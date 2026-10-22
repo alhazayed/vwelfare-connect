@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api.ts";
+import { api, ApiError } from "../api.ts";
 import { useI18n } from "../i18n.tsx";
 import { TopBar } from "../components/TopBar.tsx";
 import { HelpButton, HelpDialog } from "../components/chat.tsx";
@@ -44,7 +44,12 @@ export function StaffLogin({ onDone }: { onDone: () => Promise<void> }) {
             </form>
           ) : (
             <form className="stack" onSubmit={e => { e.preventDefault(); void run(async () => {
-              await api("POST", "/api/auth/staff/mfa", { code });
+              try { await api("POST", "/api/auth/staff/mfa", { code }); }
+              catch (e) {
+                // Too many wrong codes: the account is locked and signed out, so start again from the password.
+                if (e instanceof ApiError && e.code === "locked") { setCode(""); setStep("password"); }
+                throw e;
+              }
               await onDone();
             }); }}>
               <h1>{t(step === "mfa" ? "mfaTitle" : "mfaSetupTitle")}</h1>
