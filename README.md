@@ -106,6 +106,8 @@ Not ready for real patients on Vercel yet:
 - Live updates (`/api/ws`) are kept in each function instance's memory, so a screen connected to another instance can miss them. They need a shared channel (for example Redis pub/sub) before launch.
 - Choose the function region to match the EMR and the center's data-residency rules.
 
+To try a preview deployment without a computer, set `PREVIEW_SEED_PASSWORD` (12 characters or more) in the project's environment variables for **Preview only**. On start-up, a preview deployment then adds the sample accounts (super admin `admin@vwelfare.example`, providers `s.almansour@vwelfare.example` and `o.khalil@vwelfare.example`, patient `layla.h`) with that password, unless the super admin already exists. Nothing about them is logged. Staff set up their authenticator by scanning the QR code at first sign-in. Production never adds them. Give Preview its own `DATABASE_URL`, or the sample accounts end up in the production database.
+
 Run all three services together locally with `vercel dev`.
 
 ## Useful commands

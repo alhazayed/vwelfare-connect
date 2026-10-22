@@ -1,8 +1,14 @@
 import { buildApp } from "./app.ts";
 import { createDeps } from "./bootstrap.ts";
 import { workerTick } from "./services/chat.ts";
+import { seedPreview } from "./services/preview-seed.ts";
 
 const { deps, close } = await createDeps();
+try {
+  if (await seedPreview(deps) === "added") console.log("Preview sample accounts added");
+} catch (e) {
+  console.error("Could not add the preview sample accounts:", (e as Error).name);
+}
 const app = await buildApp(deps, { logger: true });
 // Vercel runs the server inside a function and tells it which port to use. Don't await
 // listen(): Vercel only reports the server as listening once this module has finished

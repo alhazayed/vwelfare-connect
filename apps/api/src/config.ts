@@ -29,7 +29,9 @@ const schema = z.object({
   EMR_ALLOWED_HOSTS: z.string().optional().transform(v => (v ?? "").split(",").map(h => h.trim().toLowerCase()).filter(Boolean)),
   EMR_CLIENT_ID: z.string().default("vwelfare-connect"),
   EMR_CLIENT_SECRET: z.string().default("dev-secret"),
-  SEED_ADMIN_EMAIL: z.string().email().default("admin@vwelfare.example")
+  SEED_ADMIN_EMAIL: z.string().email().default("admin@vwelfare.example"),
+  // Preview deployments only: adds sample accounts with this password (see services/preview-seed.ts).
+  PREVIEW_SEED_PASSWORD: z.string().optional().transform(v => v || undefined).pipe(z.string().min(12, "PREVIEW_SEED_PASSWORD must be at least 12 characters").optional())
 });
 
 export type Config = Omit<z.infer<typeof schema>, "EMR_BASE_URL" | "TRUST_PROXY"> & { EMR_BASE_URL: string; TRUST_PROXY: string[] | true; dataDir: string; production: boolean };
