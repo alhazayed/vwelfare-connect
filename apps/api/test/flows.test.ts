@@ -43,6 +43,16 @@ describe("staff accounts", () => {
     expect((await p.req("GET", "/api/provider/patients")).statusCode).toBe(200);
   });
 
+  it("names the refused field and the rate limit in error codes the app can translate", async () => {
+    const anon = new Client(env.app);
+    const bad = await anon.req("POST", "/api/auth/patient/accept-invite", { token: "x", username: "a!", password: "longenough", acceptTerms: true });
+    expect(bad.json()).toMatchObject({ code: "invalid_input", field: "username" });
+    let last = 0;
+    for (let i = 0; i < 11; i++) last = (await anon.req("POST", "/api/auth/patient/login", { username: "nobody", password: "wrong" })).statusCode;
+    expect(last).toBe(429);
+    expect((await anon.req("POST", "/api/auth/patient/login", { username: "nobody", password: "wrong" })).json().code).toBe("rate_limited");
+  });
+
   it("rejects requests without the app header", async () => {
     const res = await env.app.inject({ method: "POST", url: "/api/auth/patient/login", payload: { username: "x", password: "y" } });
     expect(res.statusCode).toBe(403);

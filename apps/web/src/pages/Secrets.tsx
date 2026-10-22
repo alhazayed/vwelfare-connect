@@ -45,6 +45,8 @@ const T = {
     err_bad_url: "Enter a full address starting with http:// or https://", err_bad_port: "Enter a port number.", err_too_long: "That value is too long.",
     err_emr_host_not_allowed: "This EMR address isn't on the server's allowed list. Ask the hosting team to add its host to EMR_ALLOWED_HOSTS first.",
     err_emr_https_required: "The EMR address must start with https:// on the live system.",
+    err_vault_exists: "The secrets password is already set. Reload the page to unlock the list.",
+    err_vault_not_set: "Set the secrets password first.",
     err_locked: "Too many attempts. Try again in 15 minutes."
   },
   ar: {
@@ -80,6 +82,8 @@ const T = {
     err_bad_url: "أدخل عنواناً كاملاً يبدأ بـ http:// أو https://", err_bad_port: "أدخل رقم المنفذ.", err_too_long: "القيمة طويلة جداً.",
     err_emr_host_not_allowed: "عنوان السجل الطبي هذا ليس في القائمة المسموح بها على الخادم. يجب أن يضيف فريق الاستضافة اسم الخادم إلى EMR_ALLOWED_HOSTS أولاً.",
     err_emr_https_required: "يجب أن يبدأ عنوان السجل الطبي بـ https:// في النظام الفعلي.",
+    err_vault_exists: "كلمة مرور الأسرار مُعيّنة بالفعل. يُرجى إعادة تحميل الصفحة لفتح القائمة.",
+    err_vault_not_set: "يُرجى تعيين كلمة مرور الأسرار أولاً.",
     err_locked: "محاولات كثيرة. حاول مرة أخرى بعد 15 دقيقة."
   }
 };

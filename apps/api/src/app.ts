@@ -24,14 +24,18 @@ export async function buildApp(deps: Deps, opts: { logger?: boolean } = {}) {
   });
 
   await app.register(cookie);
-  await app.register(rateLimit, { global: false });
+  await app.register(rateLimit, {
+    global: false,
+    errorResponseBuilder: () => new HttpError(429, "rate_limited", "Too many requests in a short time. Wait a minute and try again.")
+  });
   await app.register(multipart, { limits: { fileSize: MAX_FILE_BYTES, files: 1 } });
   await app.register(websocket);
   registerAuth(app, deps);
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message });
-    if (err instanceof ZodError) return reply.code(400).send({ code: "invalid_input", message: err.issues[0]?.message ?? "Invalid input", issues: err.issues });
+    // `field` names the first input that failed, so the app can show that field's rule in the person's language.
+    if (err instanceof ZodError) return reply.code(400).send({ code: "invalid_input", message: err.issues[0]?.message ?? "Invalid input", field: String(err.issues[0]?.path[0] ?? ""), issues: err.issues });
     if (err instanceof EmrUnavailable) {
       req.log.warn({ err: err.message }, "EMR unavailable");
       return reply.code(503).send({ code: "emr_unavailable", message: "The EMR isn't responding right now. Try again in a moment." });

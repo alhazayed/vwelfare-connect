@@ -91,6 +91,30 @@ const en = {
   err_email_taken: "A provider with this email already exists.", err_bad_mobile: "Enter a mobile number with at least 8 digits.",
   err_FST_REQ_FILE_TOO_LARGE: "This file is larger than 10 MB.", err_generic: "Something went wrong. Try again.",
   err_retry_soon: "This chat is being sent now or will be tried again within 2 minutes.",
+  err_already_open: "A chat with this patient is already open. Reload the page to see it.",
+  err_chat_locked: "This chat was finished, so it can't take new messages. Start a new chat to continue.",
+  err_consent_required: "The patient hasn't allowed you to read this chat. Ask for their consent first.",
+  err_file_rejected: "This file was blocked by the virus scan. Check the file or choose another one.",
+  err_file_too_large: "This file is larger than 10 MB. Choose a smaller file.",
+  err_forbidden: "Your account can't open this.",
+  err_missing_header: "The request didn't come from the Vwelfare Connect app. Reload the page and try again.",
+  err_mfa_already_set_up: "Your authenticator app is already set up. Sign in with a code from it.",
+  err_no_file: "Choose a file to attach.",
+  err_no_open_chat: "There's no open chat with this patient. Start one to send a message.",
+  err_no_pending_request: "This request was already answered or withdrawn.",
+  err_not_found: "This couldn't be found. It may have been removed.",
+  err_not_signed_in: "You're signed out. Sign in again to continue.",
+  err_not_your_patient: "This patient isn't in your list.",
+  err_not_your_provider: "This provider isn't on your care team.",
+  err_patient_not_active: "The patient hasn't created their account yet. You can chat once they have.",
+  err_rate_limited: "Too many requests in a short time. Wait a minute and try again.",
+  err_server_error: "Something went wrong on the server. Try again in a moment. If it keeps happening, contact the center.",
+  err_invalid_input: "Some details aren't in the right format. Check them and try again.",
+  err_invalid_username: "Use 4–40 letters, numbers, dots, dashes or underscores for the username.",
+  err_invalid_password: "Use at least 8 characters for the password.",
+  err_invalid_fileNumber: "Enter a file number of 3 to 12 digits.",
+  err_invalid_email: "Enter a full email address, like name@example.com.",
+  err_invalid_code: "Enter the 6-digit code from your authenticator app.",
   kb: "KB", mb: "MB", hm: "{h}h {m}m"
 };
 
@@ -181,6 +205,30 @@ const ar: Record<Key, string> = {
   err_email_taken: "يوجد مقدم رعاية بهذا البريد بالفعل.", err_bad_mobile: "أدخل رقم جوال من 8 أرقام على الأقل.",
   err_FST_REQ_FILE_TOO_LARGE: "حجم الملف أكبر من 10 ميجابايت.", err_generic: "حدث خطأ. حاول مرة أخرى.",
   err_retry_soon: "يجري إرسال هذه المحادثة الآن أو ستُعاد المحاولة خلال دقيقتين.",
+  err_already_open: "توجد محادثة مفتوحة بالفعل مع هذا المريض. يُرجى إعادة تحميل الصفحة لعرضها.",
+  err_chat_locked: "انتهت هذه المحادثة ولا تقبل رسائل جديدة. يُرجى بدء محادثة جديدة للمتابعة.",
+  err_consent_required: "لا يوجد إذن من المريض لقراءة هذه المحادثة. يُرجى طلب الموافقة أولاً.",
+  err_file_rejected: "حُظر هذا الملف في فحص الفيروسات. يُرجى التحقق من الملف أو اختيار ملف آخر.",
+  err_file_too_large: "حجم هذا الملف أكبر من 10 ميجابايت. يُرجى اختيار ملف أصغر.",
+  err_forbidden: "لا يمكن فتح هذا بهذا الحساب.",
+  err_missing_header: "لم يصدر الطلب من تطبيق Vwelfare Connect. يُرجى إعادة تحميل الصفحة والمحاولة مرة أخرى.",
+  err_mfa_already_set_up: "تطبيق المصادقة مُعدّ بالفعل. يُرجى تسجيل الدخول برمز منه.",
+  err_no_file: "يُرجى اختيار ملف لإرفاقه.",
+  err_no_open_chat: "لا توجد محادثة مفتوحة مع هذا المريض. يُرجى بدء محادثة لإرسال رسالة.",
+  err_no_pending_request: "تمت الإجابة عن هذا الطلب أو سُحب من قبل.",
+  err_not_found: "تعذّر العثور على هذا. ربما أُزيل.",
+  err_not_signed_in: "انتهت جلسة الدخول. يُرجى تسجيل الدخول مرة أخرى للمتابعة.",
+  err_not_your_patient: "هذا المريض ليس في قائمتك.",
+  err_not_your_provider: "مقدم الرعاية هذا ليس ضمن فريق رعايتك.",
+  err_patient_not_active: "لم يُنشأ حساب المريض بعد. يمكن بدء المحادثة بعد إنشائه.",
+  err_rate_limited: "طلبات كثيرة في وقت قصير. يُرجى الانتظار دقيقة ثم المحاولة مرة أخرى.",
+  err_server_error: "حدث خطأ في الخادم. يُرجى المحاولة بعد قليل، وإذا تكرر ذلك يُرجى التواصل مع المركز.",
+  err_invalid_input: "بعض البيانات ليست بالصيغة الصحيحة. يُرجى مراجعتها والمحاولة مرة أخرى.",
+  err_invalid_username: "يجب أن يتكون اسم المستخدم من 4 إلى 40 حرفاً إنجليزياً أو رقماً أو نقطة أو شرطة أو شرطة سفلية.",
+  err_invalid_password: "يجب ألا تقل كلمة المرور عن 8 أحرف.",
+  err_invalid_fileNumber: "يُرجى إدخال رقم ملف من 3 إلى 12 رقماً.",
+  err_invalid_email: "يُرجى إدخال بريد إلكتروني كامل، مثل name@example.com.",
+  err_invalid_code: "يُرجى إدخال الرمز المكوّن من 6 أرقام من تطبيق المصادقة.",
   kb: "ك.ب", mb: "م.ب", hm: "{h} س {m} د"
 };
 
@@ -232,8 +280,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       fSize: b => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} ${t("mb")}` : `${Math.max(1, Math.round(b / 1024))} ${t("kb")}`),
       errText: e => {
         const code = (e as { code?: string })?.code;
+        const field = (e as { field?: string })?.field;
+        const fieldKey = `err_invalid_${field}` as Key;
+        if (code === "invalid_input" && field && fieldKey in en) return t(fieldKey);
         const key = `err_${code}` as Key;
-        return code && key in en ? t(key) : (e as Error)?.message || t("err_generic");
+        if (code && key in en) return t(key);
+        // Untranslated server text is English, so Arabic screens show the general message instead.
+        return (lang === "en" && (e as Error)?.message) || t("err_generic");
       }
     };
   }, [lang]);
