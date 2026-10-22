@@ -8,4 +8,5 @@ const { app } = buildMockEmr({
   clientSecret: process.env.EMR_CLIENT_SECRET ?? "dev-secret",
   logger: true
 });
-await app.listen({ port, host: "127.0.0.1" });
+// Vercel runs the server inside a function and tells it which port to use.
+await app.listen(process.env.VERCEL ? { port: Number(process.env.PORT ?? 3000), host: "0.0.0.0" } : { port, host: "127.0.0.1" });
