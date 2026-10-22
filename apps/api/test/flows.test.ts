@@ -49,6 +49,38 @@ describe("staff accounts", () => {
   });
 });
 
+describe("browser protection", () => {
+  it("sends API responses that can't run, load or be framed", async () => {
+    const res = await env.app.inject({ method: "GET", url: "/api/health" });
+    expect(res.headers["content-security-policy"]).toBe("default-src 'none'; frame-ancestors 'none'");
+    expect(res.headers["x-frame-options"]).toBe("DENY");
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["cache-control"]).toBe("no-store");
+  });
+
+  it("serves past-chat files only as a shareable type", async () => {
+    await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
+    const sara = await env.staffClient("sara@vwelfare.test");
+    const patient = await onboardPatient(sara, "10633", "mariam.s");
+    const pid = (await patient.ok("GET", "/api/patient/me")).team[0].id;
+    await patient.upload(`/api/patient/providers/${pid}/chat/files`, "sleep-log.pdf", Buffer.from("%PDF-1.4 sleep log"));
+    await sara.ok("POST", "/api/provider/patients/10633/chat/finish");
+
+    const rec = (await patient.ok<any[]>("GET", `/api/patient/providers/${pid}/records`)).find(r => r.recordName === "10633_2026-10-21_09-00");
+    const view = await patient.ok("GET", `/api/patient/records/${rec.recordId}`);
+    const url = `/api/patient/records/${rec.recordId}/attachments/${view.attachments[0].id}`;
+    const ok = await patient.req("GET", url);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.headers["content-type"]).toBe("application/pdf");
+    expect(ok.headers["content-security-policy"]).toContain("script-src 'none'");
+    expect(ok.headers["cache-control"]).toBe("no-store");
+
+    // If the EMR reports a type that could run in the browser, the file isn't served.
+    env.emr.records.find(r => r.recordId === rec.recordId)!.attachments[0]!.mimeType = "text/html";
+    expect((await patient.req("GET", url)).statusCode).toBe(415);
+  });
+});
+
 describe("chat lifecycle", () => {
   it("saves a finished chat to the EMR and deletes it from the platform", async () => {
     await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193", nameEn: "Dr. Sara Al-Mansour" });

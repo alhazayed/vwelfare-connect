@@ -45,6 +45,15 @@ export async function buildApp(deps: Deps, opts: { logger?: boolean } = {}) {
   // Responses with patient data must never be cached.
   app.addHook("onSend", async (_req, reply) => { if (!reply.hasHeader("cache-control")) reply.header("cache-control", "no-store"); });
 
+  // API responses are data, never pages: nothing in them may run, load or be framed. The web app's own headers are in vercel.json.
+  app.addHook("onSend", async (_req, reply) => {
+    reply.header("x-content-type-options", "nosniff");
+    reply.header("x-frame-options", "DENY");
+    reply.header("referrer-policy", "no-referrer");
+    if (!reply.hasHeader("content-security-policy")) reply.header("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+    if (deps.config.COOKIE_SECURE) reply.header("strict-transport-security", "max-age=63072000; includeSubDomains");
+  });
+
   app.get("/api/health", async () => ({ ok: true }));
 
   // Live updates: tells the signed-in person's open screens to reload. Carries IDs only.
