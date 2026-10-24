@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { and, desc, eq, gt, isNull, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, like, lt, or, sql } from "drizzle-orm";
 import { auditLog, authSessions, chatSessions, invitations, patients, providerPatients, staff } from "../db/schema.ts";
 import { newToken, sha256 } from "../lib/crypto.ts";
 import { HttpError, type Deps } from "../deps.ts";
@@ -381,22 +381,80 @@ export function adminRoutes(app: FastifyInstance, deps: Deps) {
     return rules;
   });
 
-  app.get<{ Querystring: { q?: string; who?: string; limit?: string } }>("/api/admin/audit", async req => {
+  // One list of what needs an admin: file numbers, provider ids and counts only.
+  app.get("/api/admin/attention", async req => {
+    requireStaff(req, "admin");
+    const now = deps.now();
+    const nowSql = sql`${now.toISOString()}::timestamptz`;
+    const file = sql.raw(`"patients"."file_number"`);
+    const staffId = sql.raw(`"staff"."id"`);
+    const openInvite = (kind: "staff" | "patient", subject: unknown) =>
+      sql`exists (select 1 from ${invitations} where ${invitations.kind} = ${kind} and ${invitations.subject} = ${subject} and ${invitations.usedAt} is null and ${invitations.expiresAt} > ${nowSql})`;
+
+    const invitesExpired = await deps.db.select({ fileNumber: patients.fileNumber }).from(patients)
+      .where(and(eq(patients.status, "invited"), sql`not ${openInvite("patient", file)}`)).orderBy(patients.fileNumber);
+    const providersNotSetUp = await deps.db.select({ id: staff.id }).from(staff)
+      .where(and(eq(staff.role, "provider"), eq(staff.active, true), isNull(staff.passwordHash), sql`not ${openInvite("staff", sql`${staffId}::text`)}`));
+    const lockedPatients = await deps.db.select({ fileNumber: patients.fileNumber }).from(patients).where(gt(patients.lockedUntil, now));
+    const lockedProviders = await deps.db.select({ id: staff.id }).from(staff).where(and(eq(staff.role, "provider"), gt(staff.lockedUntil, now)));
+    const noProvider = await deps.db.select({ fileNumber: patients.fileNumber }).from(patients)
+      .where(and(sql`${patients.status} <> 'deactivated'`,
+        sql`not exists (select 1 from ${providerPatients} join ${staff} on ${staff.id} = ${providerPatients.providerId} where ${providerPatients.fileNumber} = ${file} and ${providerPatients.status} = 'accepted' and ${staff.active})`))
+      .orderBy(patients.fileNumber);
+    const unansweredRequests = await deps.db.select({ fileNumber: providerPatients.fileNumber, providerId: providerPatients.providerId, since: providerPatients.createdAt })
+      .from(providerPatients)
+      .where(and(eq(providerPatients.status, "pending"), lt(providerPatients.createdAt, new Date(now.getTime() - 7 * 86_400_000))))
+      .orderBy(providerPatients.createdAt);
+    const stuckChats = await deps.db.select({ recordName: chatSessions.recordName, lastError: chatSessions.lastError, endedAt: chatSessions.endedAt })
+      .from(chatSessions).where(and(eq(chatSessions.status, "locked"), sql`${chatSessions.lastError} is not null`)).orderBy(chatSessions.endedAt);
+    return {
+      invitesExpired: invitesExpired.map(r => r.fileNumber),
+      providersNotSetUp: providersNotSetUp.map(r => r.id),
+      lockedPatients: lockedPatients.map(r => r.fileNumber),
+      lockedProviders: lockedProviders.map(r => r.id),
+      noProvider: noProvider.map(r => r.fileNumber),
+      unansweredRequests,
+      stuckChats
+    };
+  });
+
+  // What a provider did, and what was done to their account.
+  app.get<{ Params: { id: string } }>("/api/admin/providers/:id/activity", async req => {
+    requireStaff(req, "admin");
+    const p = await findProvider(req.params.id);
+    return deps.db.select({ id: auditLog.id, at: auditLog.at, actorType: auditLog.actorType, actorId: auditLog.actorId, action: auditLog.action, target: auditLog.target })
+      .from(auditLog)
+      .where(or(and(eq(auditLog.actorType, "provider"), eq(auditLog.actorId, p.id)), eq(auditLog.target, p.id)))
+      .orderBy(desc(auditLog.id)).limit(100);
+  });
+
+  app.get<{ Querystring: { q?: string; who?: string; limit?: string; from?: string; to?: string } }>("/api/admin/audit", async req => {
     requireStaff(req, "admin");
     const who = z.enum(["all", "admin", "provider", "patient", "system"]).catch("all").parse(req.query.who ?? "all");
     const q = (req.query.q ?? "").trim().toLowerCase();
     const limit = Math.min(Number(req.query.limit) || 200, 500);
+    // Whole days in the center's time zone, both ends included.
+    const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().catch(undefined);
+    const from = day.parse(req.query.from), to = day.parse(req.query.to);
+    const tz = deps.config.CENTER_TIMEZONE;
     const rows = await deps.db.select({
       id: auditLog.id, at: auditLog.at, actorType: auditLog.actorType, actorId: auditLog.actorId, action: auditLog.action, target: auditLog.target,
-      actorName: staff.nameEn
+      actorName: staff.nameEn, actorNameAr: staff.nameAr
     }).from(auditLog)
       .leftJoin(staff, sql`${staff.id}::text = ${auditLog.actorId}`)
-      .where(who === "all" ? undefined : eq(auditLog.actorType, who))
+      .where(and(
+        who === "all" ? undefined : eq(auditLog.actorType, who),
+        from ? sql`${auditLog.at} >= (${from}::date)::timestamp at time zone ${tz}` : undefined,
+        to ? sql`${auditLog.at} < ((${to}::date) + 1)::timestamp at time zone ${tz}` : undefined
+      ))
       .orderBy(desc(auditLog.id)).limit(q ? 2000 : limit);
-    const staffNames = new Map((await deps.db.select({ id: staff.id, n: staff.nameEn }).from(staff)).map(s => [s.id, s.n]));
-    const out = rows.map(r => ({ ...r, targetName: r.target ? staffNames.get(r.target) ?? null : null }));
+    const staffNames = new Map((await deps.db.select({ id: staff.id, n: staff.nameEn, ar: staff.nameAr }).from(staff)).map(s => [s.id, s]));
+    const out = rows.map(r => {
+      const tgt = r.target ? staffNames.get(r.target) : undefined;
+      return { ...r, targetName: tgt?.n ?? null, targetNameAr: tgt?.ar ?? null };
+    });
     return q
-      ? out.filter(r => [r.actorName, r.actorId, r.action, r.target, r.targetName].some(v => v && String(v).toLowerCase().includes(q))).slice(0, limit)
+      ? out.filter(r => [r.actorName, r.actorNameAr, r.actorId, r.action, r.target, r.targetName, r.targetNameAr].some(v => v && String(v).toLowerCase().includes(q))).slice(0, limit)
       : out;
   });
 }

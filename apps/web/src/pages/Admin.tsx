@@ -19,9 +19,12 @@ type PatientDetail = {
   fileNumber: string; status: PatientStatus; createdAt: string; termsAcceptedAt: string | null; locked: boolean; mobileEnd: string | null; openChats: number;
   team: Array<{ providerId: string; nameEn: string; nameAr: string | null; specialtyEn: string | null; specialtyAr: string | null; active: boolean; link: "pending" | "accepted" | "declined" }>;
   invitation: { sentAt: string; expiresAt: string; usedAt: string | null } | null;
-  activity: Array<{ id: number; at: string; actorType: AuditRow["actorType"]; actorId: string | null; action: string }>;
+  activity: Array<{ id: number; at: string; actorType: AuditRow["actorType"]; actorId: string | null; action: string; target?: string | null }>;
 };
-type AuditRow = { id: number; at: string; actorType: "admin" | "provider" | "patient" | "system"; actorId: string | null; actorName: string | null; action: string; target: string | null; targetName: string | null };
+type AuditRow = {
+  id: number; at: string; actorType: "admin" | "provider" | "patient" | "system"; actorId: string | null; actorName: string | null; actorNameAr: string | null;
+  action: string; target: string | null; targetName: string | null; targetNameAr: string | null;
+};
 
 const ACTIONS: Record<string, { en: string; ar: string }> = {
   provider_created: { en: "Created a provider account", ar: "إنشاء حساب مقدم رعاية" },
@@ -83,6 +86,7 @@ const ACTIONS: Record<string, { en: string; ar: string }> = {
 export function AdminPage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<"overview" | "patients" | "secrets">("overview");
+  const [openFile, setOpenFile] = useState<string | null>(null);
   return (
     <>
       <div className="tabs" role="tablist" style={{ marginBottom: 16, borderBottom: "1px solid var(--line)" }}>
@@ -90,12 +94,13 @@ export function AdminPage() {
         <button role="tab" type="button" aria-selected={tab === "patients"} onClick={() => setTab("patients")}>{t("adminTabPatients")}</button>
         <button role="tab" type="button" aria-selected={tab === "secrets"} onClick={() => setTab("secrets")}>{t("adminTabSecrets")}</button>
       </div>
-      {tab === "overview" ? <Overview /> : tab === "patients" ? <PatientsPanel /> : <SecretsPanel />}
+      {tab === "overview" ? <Overview onOpenPatient={f => { setOpenFile(f); setTab("patients"); }} />
+        : tab === "patients" ? <PatientsPanel initialOpen={openFile} onOpened={() => setOpenFile(null)} /> : <SecretsPanel />}
     </>
   );
 }
 
-function Overview() {
+function Overview({ onOpenPatient }: { onOpenPatient: (file: string) => void }) {
   const { t, lang, errText } = useI18n();
   const toast = useToast();
   const [version, setVersion] = useState(0);
@@ -110,6 +115,8 @@ function Overview() {
 
   return (
     <>
+      <Attention version={version} providers={providers.data ?? []} onOpenPatient={onOpenPatient}
+        onOpenProvider={id => { const p = providers.data?.find(x => x.id === id); if (p) setManaging(p); }} />
       <div className="screen-head">
         <div><h1>{t("provTitle")}</h1><p className="muted">{t("provSub")}</p></div>
         {!adding && <button className="btn primary" onClick={() => setAdding(true)}>+ {t("addProvider")}</button>}
@@ -295,11 +302,13 @@ function AuditLog({ version }: { version: number }) {
   const { t, lang, fDT, errText } = useI18n();
   const [q, setQ] = useState("");
   const [who, setWho] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [debounced, setDebounced] = useState("");
   useEffect(() => { const h = setTimeout(() => setDebounced(q), 300); return () => clearTimeout(h); }, [q]);
-  const rows = useAsync(() => api<AuditRow[]>("GET", `/api/admin/audit?q=${encodeURIComponent(debounced)}&who=${who}`), [debounced, who, version]);
+  const rows = useAsync(() => api<AuditRow[]>("GET", `/api/admin/audit?q=${encodeURIComponent(debounced)}&who=${who}&from=${from}&to=${to}`), [debounced, who, from, to, version]);
   const actor = (r: AuditRow) => r.actorType === "system" ? t("whoPlatform") : r.actorType === "patient" ? t("patientN", { n: r.actorId ?? "" })
-    : r.actorName ?? (r.actorType === "admin" ? t("whoAdmin") : r.actorId ?? "");
+    : (lang === "ar" && r.actorNameAr) || r.actorName || (r.actorType === "admin" ? t("whoAdmin") : r.actorId ?? "");
   return (
     <section className="card pad">
       <h2>{t("auditTitle")}</h2>
@@ -310,13 +319,15 @@ function AuditLog({ version }: { version: number }) {
           <option value="all">{t("whoAll")}</option><option value="admin">{t("whoAdmin")}</option><option value="provider">{t("whoProviders")}</option>
           <option value="patient">{t("whoPatients")}</option><option value="system">{t("whoPlatform")}</option>
         </select>
+        <label className="date-f"><span>{t("from")}</span><input type="date" value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} /></label>
+        <label className="date-f"><span>{t("to")}</span><input type="date" value={to} min={from || undefined} onChange={e => setTo(e.target.value)} /></label>
       </div>
       {rows.error ? <p className="err">{errText(rows.error)}</p> : null}
       <ol className="audit">
         {(rows.data ?? []).map(r => (
           <li key={r.id}>
             <time>{fDT(r.at)}</time>
-            <div><b>{actor(r)}</b>{ACTIONS[r.action]?.[lang] ?? r.action}{r.target && <> · <span className="mono">{r.targetName ?? r.target}</span></>}</div>
+            <div><b>{actor(r)}</b>{ACTIONS[r.action]?.[lang] ?? r.action}{r.target && <> · {r.targetName ? <span>{(lang === "ar" && r.targetNameAr) || r.targetName}</span> : <span className="mono">{r.target}</span>}</>}</div>
           </li>
         ))}
         {rows.data && !rows.data.length && <li className="muted">{t("auditNone")}</li>}
@@ -325,7 +336,7 @@ function AuditLog({ version }: { version: number }) {
   );
 }
 
-function PatientsPanel() {
+function PatientsPanel({ initialOpen, onOpened }: { initialOpen: string | null; onOpened: () => void }) {
   const { t, lang, fDate, errText } = useI18n();
   const [version, setVersion] = useState(0);
   const rows = useAsync(() => api<PatientListRow[]>("GET", "/api/admin/patients"), [version]);
@@ -333,7 +344,8 @@ function PatientsPanel() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"all" | PatientStatus | "locked">("all");
   const [provider, setProvider] = useState("all");
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(initialOpen);
+  useEffect(() => { if (initialOpen) onOpened(); }, [initialOpen, onOpened]);
   const pName = (p: ProviderRow) => (lang === "ar" && p.nameAr) || p.nameEn;
   const digits = q.replace(/\D/g, "");
   const shown = (rows.data ?? []).filter(r =>
@@ -488,12 +500,13 @@ function PatientDialog({ file, pill, onClose, onChanged }: { file: string; pill:
 }
 
 function ProviderDialog({ p, all, onClose, onChanged }: { p: ProviderRow; all: ProviderRow[]; onClose: () => void; onChanged: () => void }) {
-  const { t, lang, errText } = useI18n();
+  const { t, lang, fDT, errText } = useI18n();
   const toast = useToast();
   const pName = (x: { nameEn: string; nameAr: string | null }) => (lang === "ar" && x.nameAr) || x.nameEn;
   const [f, setF] = useState({ nameEn: p.nameEn, nameAr: p.nameAr ?? "", specialtyEn: p.specialtyEn ?? "", specialtyAr: p.specialtyAr ?? "", email: p.email, emrStaffId: p.emrStaffId ?? "" });
   const [version, setVersion] = useState(0);
   const list = useAsync(() => api<Array<{ fileNumber: string; link: "pending" | "accepted" | "declined"; status: PatientStatus }>>("GET", `/api/admin/providers/${p.id}/patients`), [p.id, version]);
+  const activity = useAsync(() => api<PatientDetail["activity"]>("GET", `/api/admin/providers/${p.id}/activity`), [p.id, version]);
   const [to, setTo] = useState("");
   const [confirmReset, setConfirmReset] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -567,7 +580,65 @@ function ProviderDialog({ p, all, onClose, onChanged }: { p: ProviderRow; all: P
           </form>
         )}
         {err && <p className="err" role="alert">{err}</p>}
+
+        <section>
+          <h3>{t("ptActivity")}</h3>
+          <ol className="audit">
+            {(activity.data ?? []).map(a => (
+              <li key={a.id}>
+                <time>{fDT(a.at)}</time>
+                <div><b>{a.actorType === "admin" ? t("whoAdmin") : a.actorType === "system" ? t("whoPlatform") : pName(p)}</b>
+                  {ACTIONS[a.action]?.[lang] ?? a.action}{a.target && a.target !== p.id && <> · <span className="mono">{a.target}</span></>}</div>
+              </li>
+            ))}
+            {activity.data && !activity.data.length && <li className="muted">{t("ptActivityNone")}</li>}
+          </ol>
+        </section>
       </div>
     </Dialog>
+  );
+}
+
+type AttentionData = {
+  invitesExpired: string[]; providersNotSetUp: string[]; lockedPatients: string[]; lockedProviders: string[]; noProvider: string[];
+  unansweredRequests: Array<{ fileNumber: string; providerId: string; since: string }>;
+  stuckChats: Array<{ recordName: string; lastError: string | null; endedAt: string | null }>;
+};
+
+function Attention({ version, providers, onOpenPatient, onOpenProvider }: {
+  version: number; providers: ProviderRow[]; onOpenPatient: (file: string) => void; onOpenProvider: (id: string) => void;
+}) {
+  const { t, lang, errText } = useI18n();
+  const d = useAsync(() => api<AttentionData>("GET", "/api/admin/attention"), [version]);
+  const pName = (id: string) => { const p = providers.find(x => x.id === id); return p ? (lang === "ar" && p.nameAr) || p.nameEn : id; };
+  if (d.error) return <p className="err">{errText(d.error)}</p>;
+  if (!d.data) return null;
+  const a = d.data;
+  const fileChip = (f: string) => <li key={f}><button type="button" className="chip-btn mono" onClick={() => onOpenPatient(f)}>{f}</button></li>;
+  const provChip = (id: string) => <li key={id}><button type="button" className="chip-btn" onClick={() => onOpenProvider(id)}>{pName(id)}</button></li>;
+  const groups = [
+    { key: "attInvitesExpired", n: a.invitesExpired.length, body: a.invitesExpired.map(fileChip) },
+    { key: "attProvidersNotSetUp", n: a.providersNotSetUp.length, body: a.providersNotSetUp.map(provChip) },
+    { key: "attLocked", n: a.lockedPatients.length + a.lockedProviders.length, body: [...a.lockedProviders.map(provChip), ...a.lockedPatients.map(fileChip)] },
+    { key: "attNoProvider", n: a.noProvider.length, body: a.noProvider.map(fileChip) },
+    { key: "attUnanswered", n: a.unansweredRequests.length, body: a.unansweredRequests.map(r => (
+      <li key={r.providerId + r.fileNumber}><button type="button" className="chip-btn" onClick={() => onOpenProvider(r.providerId)}><span className="mono">{r.fileNumber}</span> · {pName(r.providerId)}</button></li>)) },
+    { key: "attStuck", n: a.stuckChats.length, body: [<li key="hint" className="muted small">{t("attStuckHint")}</li>] }
+  ] as const;
+  const shown = groups.filter(g => g.n > 0);
+  return (
+    <section className={`card pad attention${shown.length ? " has" : ""}`} style={{ marginBottom: 16 }}>
+      <h2>{t("attTitle")}</h2>
+      {!shown.length ? <p className="muted">{t("attNone")}</p> : (
+        <div className="att-groups">
+          {shown.map(g => (
+            <div key={g.key} className="att-group">
+              <h3>{t(g.key)} <span className="pill warn">{g.n}</span></h3>
+              <ul className="chips wrap">{g.body}</ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
