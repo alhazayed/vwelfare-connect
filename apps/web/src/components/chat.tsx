@@ -111,7 +111,7 @@ export function HelpDialog({ help, onClose }: { help: { emergencyNumber: string;
     <Dialog title={t("helpTitle")} onClose={onClose}>
       <p>{t("helpBody")}</p>
       <HelpNumbers help={help} />
-      <p className="muted small">{t("callHint")}</p>
+      {(help.emergencyNumber || help.crisisLineNumber) && <p className="muted small">{t("callHint")}</p>}
     </Dialog>
   );
 }
