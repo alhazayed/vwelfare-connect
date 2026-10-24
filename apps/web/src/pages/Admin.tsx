@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api.ts";
 import { useI18n } from "../i18n.tsx";
 import { Dialog, useAsync, useToast } from "../components/ui.tsx";
@@ -6,10 +6,21 @@ import { SecretsPanel } from "./Secrets.tsx";
 
 type ProviderRow = {
   id: string; email: string; nameEn: string; nameAr: string | null; specialtyEn: string | null; specialtyAr: string | null;
-  emrStaffId: string | null; active: boolean; mfaEnabled: boolean; hasPassword: boolean; patients: number; openChats: number;
+  emrStaffId: string | null; active: boolean; mfaEnabled: boolean; hasPassword: boolean; locked: boolean; patients: number; openChats: number;
 };
 type Rules = { remindHours: number; autoFinishHours: number; emergencyNumber: string; crisisLineNumber: string; workingHours: { days: number[]; start: string; end: string } };
 type QueueRow = { id: string; recordName: string; finishedBy: string | null; endedAt: string | null; attempts: number; nextAttemptAt: string | null; lastError: string | null };
+type PatientStatus = "invited" | "active" | "deactivated";
+type PatientListRow = {
+  fileNumber: string; status: PatientStatus; createdAt: string; invitedBy: string | null; locked: boolean; team: number; pending: number;
+  openChats: number; waitingForEmr: boolean; inviteExpiresAt: string | null; lastSignIn: string | null; providerIds: string[];
+};
+type PatientDetail = {
+  fileNumber: string; status: PatientStatus; createdAt: string; termsAcceptedAt: string | null; locked: boolean; mobileEnd: string | null; openChats: number;
+  team: Array<{ providerId: string; nameEn: string; nameAr: string | null; specialtyEn: string | null; specialtyAr: string | null; active: boolean; link: "pending" | "accepted" | "declined" }>;
+  invitation: { sentAt: string; expiresAt: string; usedAt: string | null } | null;
+  activity: Array<{ id: number; at: string; actorType: AuditRow["actorType"]; actorId: string | null; action: string }>;
+};
 type AuditRow = { id: number; at: string; actorType: "admin" | "provider" | "patient" | "system"; actorId: string | null; actorName: string | null; action: string; target: string | null; targetName: string | null };
 
 const ACTIONS: Record<string, { en: string; ar: string }> = {
@@ -47,19 +58,29 @@ const ACTIONS: Record<string, { en: string; ar: string }> = {
   secret_revealed: { en: "Viewed a secret", ar: "عرض سر" },
   secret_cleared: { en: "Cleared a saved setting", ar: "مسح إعداد محفوظ" },
   secret_deleted: { en: "Deleted a secret", ar: "حذف سر" },
-  emr_connection_tested: { en: "Tested the EMR connection", ar: "اختبار الاتصال بالسجل الطبي" }
+  emr_connection_tested: { en: "Tested the EMR connection", ar: "اختبار الاتصال بالسجل الطبي" },
+  care_team_requested: { en: "Asked to join a patient's care team", ar: "طلب الانضمام إلى فريق رعاية مريض" },
+  care_team_accepted: { en: "Accepted a provider into their care team", ar: "قبول مقدم رعاية في فريق الرعاية" },
+  care_team_declined: { en: "Declined a care team request", ar: "رفض طلب الانضمام إلى فريق الرعاية" },
+  invite_resent: { en: "Sent a new invitation", ar: "إرسال دعوة جديدة" },
+  invite_resent_new_mobile: { en: "Sent a new invitation to a corrected mobile number", ar: "إرسال دعوة جديدة إلى رقم جوال مصحَّح" },
+  invite_cancelled: { en: "Cancelled an invitation link", ar: "إلغاء رابط دعوة" },
+  account_unlocked: { en: "Unlocked an account", ar: "إلغاء قفل حساب" },
+  patient_deactivated: { en: "Deactivated a patient account", ar: "تعطيل حساب مريض" },
+  patient_reactivated: { en: "Reactivated a patient account", ar: "إعادة تفعيل حساب مريض" }
 };
 
 export function AdminPage() {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"overview" | "secrets">("overview");
+  const [tab, setTab] = useState<"overview" | "patients" | "secrets">("overview");
   return (
     <>
       <div className="tabs" role="tablist" style={{ marginBottom: 16, borderBottom: "1px solid var(--line)" }}>
         <button role="tab" type="button" aria-selected={tab === "overview"} onClick={() => setTab("overview")}>{t("adminTabOverview")}</button>
+        <button role="tab" type="button" aria-selected={tab === "patients"} onClick={() => setTab("patients")}>{t("adminTabPatients")}</button>
         <button role="tab" type="button" aria-selected={tab === "secrets"} onClick={() => setTab("secrets")}>{t("adminTabSecrets")}</button>
       </div>
-      {tab === "overview" ? <Overview /> : <SecretsPanel />}
+      {tab === "overview" ? <Overview /> : tab === "patients" ? <PatientsPanel /> : <SecretsPanel />}
     </>
   );
 }
@@ -72,6 +93,9 @@ function Overview() {
   const [adding, setAdding] = useState(false);
   const [deact, setDeact] = useState<ProviderRow | null>(null);
   const name = (p: ProviderRow) => (lang === "ar" && p.nameAr) || p.nameEn;
+  const run = async (url: string, done?: string) => {
+    try { await api("POST", url); if (done) toast(done); setVersion(v => v + 1); } catch (e) { toast(errText(e), true); }
+  };
 
   return (
     <>
@@ -91,10 +115,15 @@ function Overview() {
                 <td>{(lang === "ar" && p.specialtyAr) || p.specialtyEn}</td>
                 <td>{p.patients}</td>
                 <td>{p.openChats}</td>
-                <td>{!p.active ? <span className="pill">{t("deactivated")}</span> : !p.hasPassword || !p.mfaEnabled ? <span className="pill warn">{t("setupPending")}</span> : <span className="pill ok">{t("active")}</span>}</td>
-                <td>{p.active
-                  ? <button className="btn small" onClick={() => setDeact(p)}>{t("deactivate")}</button>
-                  : <button className="btn small" onClick={async () => { try { await api("POST", `/api/admin/providers/${p.id}/reactivate`); setVersion(v => v + 1); } catch (e) { toast(errText(e), true); } }}>{t("reactivate")}</button>}</td>
+                <td>{!p.active ? <span className="pill">{t("deactivated")}</span> : !p.hasPassword || !p.mfaEnabled ? <span className="pill warn">{t("setupPending")}</span> : <span className="pill ok">{t("active")}</span>}
+                  {p.locked && <> <span className="pill danger">{t("ptLocked")}</span></>}</td>
+                <td><div className="row-actions">
+                  {p.active && !p.hasPassword && <button className="btn small" onClick={() => run(`/api/admin/providers/${p.id}/resend-invite`, t("provResent", { email: p.email }))}>{t("resendInvite")}</button>}
+                  {p.locked && <button className="btn small" onClick={() => run(`/api/admin/providers/${p.id}/unlock`, t("unlocked"))}>{t("unlock")}</button>}
+                  {p.active
+                    ? <button className="btn small" onClick={() => setDeact(p)}>{t("deactivate")}</button>
+                    : <button className="btn small" onClick={() => run(`/api/admin/providers/${p.id}/reactivate`)}>{t("reactivate")}</button>}
+                </div></td>
               </tr>
             ))}
           </tbody>
@@ -279,5 +308,167 @@ function AuditLog({ version }: { version: number }) {
         {rows.data && !rows.data.length && <li className="muted">{t("auditNone")}</li>}
       </ol>
     </section>
+  );
+}
+
+function PatientsPanel() {
+  const { t, lang, fDate, errText } = useI18n();
+  const [version, setVersion] = useState(0);
+  const rows = useAsync(() => api<PatientListRow[]>("GET", "/api/admin/patients"), [version]);
+  const providers = useAsync(() => api<ProviderRow[]>("GET", "/api/admin/providers"), []);
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<"all" | PatientStatus | "locked">("all");
+  const [provider, setProvider] = useState("all");
+  const [open, setOpen] = useState<string | null>(null);
+  const pName = (p: ProviderRow) => (lang === "ar" && p.nameAr) || p.nameEn;
+  const digits = q.replace(/\D/g, "");
+  const shown = (rows.data ?? []).filter(r =>
+    (!digits || r.fileNumber.includes(digits)) &&
+    (status === "all" || (status === "locked" ? r.locked : r.status === status)) &&
+    (provider === "all" || r.providerIds.includes(provider)));
+  const pill = (r: { status: PatientStatus; locked: boolean }) => <>
+    {r.status === "active" ? <span className="pill ok">{t("ptActive")}</span> : r.status === "invited" ? <span className="pill warn">{t("ptInvited")}</span> : <span className="pill">{t("ptDeactivated")}</span>}
+    {r.locked && <> <span className="pill danger">{t("ptLocked")}</span></>}
+  </>;
+
+  return (
+    <>
+      <div className="screen-head">
+        <div><h1>{t("ptTitle")}</h1><p className="muted">{t("ptSub")}</p></div>
+      </div>
+      <div className="filters" style={{ marginBottom: 12 }}>
+        <input type="search" inputMode="numeric" dir="ltr" value={q} placeholder={t("ptSearch")} aria-label={t("ptSearch")} onChange={e => setQ(e.target.value)} />
+        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={t("colStatus")}>
+          <option value="all">{t("ptAllStatus")}</option><option value="active">{t("ptActive")}</option><option value="invited">{t("ptInvited")}</option>
+          <option value="locked">{t("ptLocked")}</option><option value="deactivated">{t("ptDeactivated")}</option>
+        </select>
+        <select value={provider} onChange={e => setProvider(e.target.value)} aria-label={t("colTeam")}>
+          <option value="all">{t("ptAllProviders")}</option>
+          {(providers.data ?? []).map(p => <option key={p.id} value={p.id}>{pName(p)}</option>)}
+        </select>
+      </div>
+      {rows.error ? <p className="err">{errText(rows.error)}</p> : null}
+      <div className="card table-wrap">
+        <table>
+          <thead><tr><th>{t("colFile")}</th><th>{t("colStatus")}</th><th>{t("colTeam")}</th><th>{t("colOpen")}</th><th>{t("colLastIn")}</th><th>{t("colJoined")}</th><th><span className="vh">{t("manage")}</span></th></tr></thead>
+          <tbody>
+            {shown.map(r => (
+              <tr key={r.fileNumber}>
+                <td><span className="mono">{r.fileNumber}</span></td>
+                <td>{pill(r)}{r.waitingForEmr && <> <span className="pill warn">{t("waitSync")}</span></>}</td>
+                <td>{r.team}{r.pending > 0 && <span className="muted small"> {t("ptPendingN", { n: r.pending })}</span>}</td>
+                <td>{r.openChats}</td>
+                <td>{r.lastSignIn ? fDate(r.lastSignIn) : <span className="muted">{t("ptNever")}</span>}</td>
+                <td>{fDate(r.createdAt)}</td>
+                <td><button className="btn small" onClick={() => setOpen(r.fileNumber)}>{t("manage")}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {rows.data && !shown.length && <p className="empty">{rows.data.length ? t("ptNone") : t("ptNoneYet")}</p>}
+        {!rows.data && !rows.error && <div className="empty"><span className="spin" /></div>}
+      </div>
+      {open && <PatientDialog file={open} pill={pill} onClose={() => setOpen(null)} onChanged={() => setVersion(v => v + 1)} />}
+    </>
+  );
+}
+
+function PatientDialog({ file, pill, onClose, onChanged }: { file: string; pill: (r: { status: PatientStatus; locked: boolean }) => ReactNode; onClose: () => void; onChanged: () => void }) {
+  const { t, lang, fDT, errText } = useI18n();
+  const toast = useToast();
+  const [version, setVersion] = useState(0);
+  const d = useAsync(() => api<PatientDetail>("GET", `/api/admin/patients/${file}`), [file, version]);
+  const [busy, setBusy] = useState(false);
+  const [confirmDeact, setConfirmDeact] = useState(false);
+  const [mobile, setMobile] = useState("");
+  const [err, setErr] = useState("");
+  const p = d.data;
+  const now = Date.now();
+  const inviteOpen = !!p?.invitation && !p.invitation.usedAt && new Date(p.invitation.expiresAt).getTime() > now;
+
+  async function act(path: string, body: unknown, done: (r: any) => string) {
+    setBusy(true); setErr("");
+    try {
+      const r = await api<any>("POST", `/api/admin/patients/${file}/${path}`, body);
+      toast(done(r)); setConfirmDeact(false); setMobile(""); setVersion(v => v + 1); onChanged();
+    } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  const actor = (a: PatientDetail["activity"][number]) => a.actorType === "patient" ? t("patientN", { n: a.actorId ?? "" })
+    : a.actorType === "system" ? t("whoPlatform") : a.actorType === "admin" ? t("whoAdmin")
+    : (() => { const m = p?.team.find(x => x.providerId === a.actorId); return m ? (lang === "ar" && m.nameAr) || m.nameEn : t("whoProviders"); })();
+
+  return (
+    <Dialog wide title={t("ptDlgTitle", { n: file })} sub={p ? pill(p) : undefined} onClose={() => { if (!busy) onClose(); }}>
+      {d.error ? <p className="err">{errText(d.error)}</p> : !p ? <span className="spin" /> : (
+        <div className="stack">
+          <dl className="kv kv2">
+            <div><dt>{t("colJoined")}</dt><dd>{fDT(p.createdAt)}</dd></div>
+            <div><dt>{t("ptTerms")}</dt><dd>{p.termsAcceptedAt ? fDT(p.termsAcceptedAt) : t("ptNever")}</dd></div>
+            <div><dt>{t("ptMobile")}</dt><dd>{p.mobileEnd ? t("ptMobileEnd", { d: p.mobileEnd }) : "—"}</dd></div>
+            <div><dt>{t("ptInvite")}</dt><dd>{!p.invitation ? "—"
+              : p.invitation.usedAt ? t("ptInviteUsed", { t: fDT(p.invitation.usedAt) })
+              : inviteOpen ? t("ptInviteState", { sent: fDT(p.invitation.sentAt), exp: fDT(p.invitation.expiresAt) })
+              : t("ptInviteEnded", { t: fDT(p.invitation.expiresAt) })}</dd></div>
+          </dl>
+
+          <section className="stack">
+            <h3>{t("ptTeamTitle")}</h3>
+            {!p.team.length ? <p className="muted">{t("ptTeamEmpty")}</p> : (
+              <ul className="team-list">
+                {p.team.map(m => (
+                  <li key={m.providerId}>
+                    <div><b>{(lang === "ar" && m.nameAr) || m.nameEn}</b> <span className="muted small">{(lang === "ar" && m.specialtyAr) || m.specialtyEn}</span></div>
+                    <div>
+                      {m.link === "accepted" ? <span className="pill ok">{t("linkAccepted")}</span> : m.link === "pending" ? <span className="pill warn">{t("linkPending")}</span> : <span className="pill">{t("linkDeclined")}</span>}
+                      {!m.active && <> <span className="pill">{t("deactivated")}</span></>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {p.status === "invited" && (
+            <form className="inv-box stack" onSubmit={e => { e.preventDefault(); act("resend-invite", mobile.trim() ? { mobile } : {}, () => t("resent", { n: file })); }}>
+              <label className="fld"><span>{t("newMobileOpt")}</span><input type="tel" dir="ltr" autoComplete="off" value={mobile} onChange={e => setMobile(e.target.value)} /></label>
+              <div className="actions">
+                {inviteOpen && <button type="button" className="btn" disabled={busy} onClick={() => act("cancel-invite", {}, () => t("inviteCancelled", { n: file }))}>{t("cancelInvite")}</button>}
+                <button className="btn primary" disabled={busy}>{t("resendInvite")}</button>
+              </div>
+            </form>
+          )}
+
+          {confirmDeact ? (
+            <div className="note danger stack" role="alert">
+              <b>{t("ptDeactQ", { n: file })}</b>
+              <p>{t("ptDeactBody", { c: p.openChats })}</p>
+              <div className="actions">
+                <button className="btn" disabled={busy} onClick={() => setConfirmDeact(false)}>{t("cancel")}</button>
+                <button className="btn danger" disabled={busy} onClick={() => act("deactivate", {}, r => t("ptDeactDone", { n: file, c: r.finishedChats }))}>{t("deactivate")}</button>
+              </div>
+            </div>
+          ) : (
+            <div className="actions">
+              {p.locked && <button className="btn" disabled={busy} onClick={() => act("unlock", {}, () => t("unlocked"))}>{t("unlock")}</button>}
+              {p.status === "deactivated"
+                ? <button className="btn" disabled={busy} onClick={() => act("reactivate", {}, r => t(r.status === "invited" ? "ptReactInvited" : "ptReactDone", { n: file }))}>{t("reactivate")}</button>
+                : <button className="btn danger" disabled={busy} onClick={() => setConfirmDeact(true)}>{t("deactivate")}</button>}
+            </div>
+          )}
+          {err && <p className="err" role="alert">{err}</p>}
+
+          <section>
+            <h3>{t("ptActivity")}</h3>
+            <ol className="audit">
+              {p.activity.map(a => (
+                <li key={a.id}><time>{fDT(a.at)}</time><div><b>{actor(a)}</b>{ACTIONS[a.action]?.[lang] ?? a.action}</div></li>
+              ))}
+              {!p.activity.length && <li className="muted">{t("ptActivityNone")}</li>}
+            </ol>
+          </section>
+        </div>
+      )}
+    </Dialog>
   );
 }

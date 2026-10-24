@@ -75,6 +75,7 @@ export function providerRoutes(app: FastifyInstance, deps: Deps) {
     const body = z.object({ fileNumber, mobile: z.string().optional() }).parse(req.body);
     if (!(await deps.emr.getPatientName(body.fileNumber))) throw new HttpError(404, "not_in_emr", "No patient with that file number in the EMR");
     const existing = await deps.db.query.patients.findFirst({ where: eq(patients.fileNumber, body.fileNumber) });
+    if (existing?.status === "deactivated") throw new HttpError(409, "patient_deactivated", "This patient's account is deactivated. Ask the center's admin to reactivate it.");
     if (existing) {
       // The patient decides who joins their care team: the link waits until they accept it in the app.
       const now = deps.now();
@@ -124,6 +125,7 @@ export function providerRoutes(app: FastifyInstance, deps: Deps) {
   app.post<{ Params: { file: string } }>("/api/provider/patients/:file/chat", async req => {
     const me = requireStaff(req, "provider");
     const p = await requireLinked(me.id, req.params.file);
+    if (p.status === "deactivated") throw new HttpError(409, "patient_deactivated", "This patient's account is deactivated. Ask the center's admin to reactivate it.");
     if (p.status !== "active") throw new HttpError(409, "patient_not_active", "The patient hasn't created an account yet");
     if (await findSession(deps, p.fileNumber, me.id, "open")) throw new HttpError(409, "already_open");
     const s = await startSession(deps, p.fileNumber, me.id, "provider", actor(me.id, req.ip));
