@@ -77,12 +77,12 @@ Only the EMR is used today. SMS, email and virus-scanning settings and switches 
 These are deliberately not finished. Each needs a decision or a service from Vwelfare.
 
 - [ ] **Connect the real EMR.** Point `EMR_BASE_URL`, `EMR_CLIENT_ID` and `EMR_CLIENT_SECRET` at the vendor's sandbox and adjust `emr/client.ts` to their actual API.
-- [ ] **SMS and email.** `lib/notify.ts` only prints to the console. Plug in a provider licensed in your country.
+- [ ] **SMS and email.** `lib/notify.ts` only prints to the console (in full on a developer's machine; on Vercel and in production with masked addresses and no working invitation links). Plug in a provider licensed in your country.
 - [ ] **Malware scanning.** `lib/files.ts` has a `Scanner` interface with a placeholder that accepts every file. Connect ClamAV or the cloud provider's scanner.
 - [ ] **Encryption keys.** Move `FIELD_ENCRYPTION_KEY` into the cloud's key-management service.
 - [ ] **File storage.** Replace the encrypted-disk store with private, encrypted cloud object storage.
 - [ ] **Hosting.** PostgreSQL (`DATABASE_URL`) and the app in the same cloud region as the EMR, with HTTPS (`COOKIE_SECURE=true`). Set `TRUST_PROXY` to the load balancer's addresses (not needed on Vercel), or sign-in limits and the audit log see the proxy instead of the person. Build the web app with `npm run build`; serve it and proxy `/api` (including WebSockets) to the API.
-- [ ] **Emergency numbers and working hours.** Set them as super admin under Chat rules. The default working days (Sunday–Thursday, 08:00–16:00) are an assumption.
+- [ ] **Emergency numbers and working hours.** Set `EMERGENCY_NUMBER` (the national emergency number; production won't start without it, and patients see it whenever the admin hasn't saved one). Set the crisis line and working hours as super admin under Chat rules. The default working days (Sunday–Thursday, 08:00–16:00) are an assumption.
 - [ ] **Password reset.** Patients currently contact the center; add a reset-by-SMS-code flow once SMS is connected.
 - [ ] **Security review.** Independent penetration test, and update the authenticator library (`otplib` 12 is deprecated in favour of 13).
 - [ ] **Clinical review.** Crisis wording, risk-word list, response-time promise, consent text.
