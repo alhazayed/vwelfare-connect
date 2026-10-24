@@ -1,15 +1,17 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { HttpError, type Deps } from "../deps.ts";
-import { ALLOWED_TYPES, allowedMime } from "../lib/files.ts";
+import { ALLOWED_TYPES, allowedMime, matchesType, stripImageMetadata } from "../lib/files.ts";
 import type { EmrRecord } from "../emr/client.ts";
 
 export async function readUpload(deps: Deps, req: FastifyRequest) {
   const data = await req.file();
   if (!data) throw new HttpError(400, "no_file", "Attach a file");
-  const content = await data.toBuffer();
+  const raw = await data.toBuffer();
   const name = data.filename.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(0, 150);
   const mimeType = allowedMime(name);
   if (!mimeType) throw new HttpError(415, "file_type", "This file can't be shared. Use PDF, JPG, PNG, DOCX or M4A, up to 10 MB.");
+  if (!matchesType(mimeType, raw)) throw new HttpError(415, "file_mismatch", "This file isn't what its name says. Save it again as PDF, JPG, PNG, DOCX or M4A and try again.");
+  const content = await stripImageMetadata(mimeType, raw).catch(() => { throw new HttpError(415, "file_mismatch", "This file isn't what its name says. Save it again as PDF, JPG, PNG, DOCX or M4A and try again."); });
   if (!(await deps.scanner.scan(content, name)).clean) throw new HttpError(422, "file_rejected", "This file was blocked by the virus scan.");
   return { name, mimeType, content };
 }

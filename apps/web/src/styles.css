@@ -263,6 +263,8 @@ body.away .away-msg{display:grid}
 .toast-host{position:fixed;inset-inline:0;bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;pointer-events:none;z-index:60;padding-inline:16px}
 .toast{background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;box-shadow:var(--shadow);font-size:14px;max-width:520px}
 .toast.bad{background:var(--danger);color:var(--surface)}
+.toast{display:flex;align-items:center;gap:8px}
+.toast-x{pointer-events:auto;color:inherit;min-width:44px;min-height:44px;margin-block:-8px;margin-inline-end:-10px}
 
 @media (max-width:780px){
   .split[data-view="list"] .pane{display:none}
@@ -274,3 +276,10 @@ body.away .away-msg{display:grid}
   .help-short{display:none}
 }
 @media print{body{display:none!important}}
+/* Past-chat files shown inside the protected viewer */
+.pdf{display:flex;flex-direction:column;gap:8px;margin-top:8px;width:min(560px,calc(100vw - 120px))}
+.pdf-pages{display:flex;flex-direction:column;gap:8px}
+.pdf-page{max-width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff;pointer-events:none}
+.audio{display:block;width:100%;max-width:360px;min-height:44px;margin-top:8px}
+.btext{margin:0}
+.nowrap{white-space:nowrap}

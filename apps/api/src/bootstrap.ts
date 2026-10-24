@@ -36,7 +36,7 @@ export async function createDeps(config: Config = loadConfig()): Promise<{ deps:
     emr: emrFromSecrets(secrets, config),
     // Full text only on a developer's own machine; masked on Vercel and in production.
     notifier: new ConsoleNotifier(console.log, !config.VERCEL && !config.production && process.env.NODE_ENV !== "production"),
-    hub: new Hub(),
+    hub: new Hub(db),
     now: () => new Date()
   };
   return { deps, close };

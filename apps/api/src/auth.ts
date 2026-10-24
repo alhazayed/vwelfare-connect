@@ -59,7 +59,8 @@ export function registerAuth(app: FastifyInstance, deps: Deps) {
       if (!p || p.status !== "active") return;
       req.auth = { kind: "patient", sessionId: row.id, patient: p };
     }
-    // Sliding idle timeout.
+    // Sliding idle timeout. Polling for live updates isn't activity: an open, untouched screen must still time out.
+    if (req.url.split("?")[0] === "/api/live") return;
     await deps.db.update(authSessions)
       .set({ lastSeenAt: now, expiresAt: new Date(now.getTime() + IDLE_MINUTES[row.kind] * 60_000) })
       .where(eq(authSessions.id, row.id));

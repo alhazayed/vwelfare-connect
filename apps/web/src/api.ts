@@ -50,22 +50,45 @@ export type RecordView = {
   attachments: Array<{ id: string; fileName: string; mimeType: string; sizeBytes: number }>;
 };
 
-export type LiveEvent = { type: "chat"; fileNumber: string; providerId: string } | { type: "consent"; fileNumber: string };
+export type LiveEvent = { type: "chat"; fileNumber: string; providerId: string } | { type: "consent"; fileNumber: string } | { type: "poll" };
 
-/** Live updates over a WebSocket. Reconnects after drops. */
+const POLL_MS = 10_000;
+
+/**
+ * Live updates. A WebSocket when the server can hold one (local, a long-running server); otherwise, and whenever the
+ * socket is down, the screen asks every 10 seconds whether anything changed (Vercel). Polling doesn't keep the
+ * session alive, and stops while the tab is hidden.
+ */
 export function useLive(onEvent: (e: LiveEvent) => void) {
   const ref = useRef(onEvent);
   ref.current = onEvent;
   useEffect(() => {
     let ws: WebSocket | null = null;
+    let open = false;
     let stopped = false;
+    let retry = 3000;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let last: number | undefined;
     const connect = () => {
       ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`);
+      ws.onopen = () => { open = true; retry = 3000; };
       ws.onmessage = ev => { try { ref.current(JSON.parse(ev.data)); } catch { /* ignore malformed */ } };
-      ws.onclose = () => { if (!stopped) timer = setTimeout(connect, 3000); };
+      ws.onclose = () => {
+        open = false;
+        if (!stopped) { timer = setTimeout(connect, retry); retry = Math.min(retry * 2, 60_000); }
+      };
+    };
+    const poll = async () => {
+      if (open || document.hidden) return;
+      try {
+        const { v } = await api<{ v: number }>("GET", "/api/live");
+        if (last !== undefined && v !== last) ref.current({ type: "poll" });
+        last = v;
+      } catch { /* signed out or offline: api() already handles signing out */ }
     };
     connect();
-    return () => { stopped = true; clearTimeout(timer); ws?.close(); };
+    void poll();
+    const interval = setInterval(poll, POLL_MS);
+    return () => { stopped = true; clearTimeout(timer); clearInterval(interval); ws?.close(); };
   }, []);
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type ChatMessage, type ChatSession, type RecordView } from "../api.ts";
 import { useI18n, type Bilingual } from "../i18n.tsx";
 import { Dialog, Icon, useToast } from "./ui.tsx";
+import { AudioPlayer, PdfPages } from "./files.tsx";
 
 type Viewer = "patient" | "provider";
 
@@ -30,9 +31,9 @@ function Message({ m, viewer, startedBy, patientName, providerName, t, fDT, fTim
         {a ? (
           <div className="file">
             {a.mimeType.startsWith("image/") && <img src={`/api/chat-files/${a.id}`} alt="" />}
-            <div className="file-row">{Icon.file}<a className="fname" href={`/api/chat-files/${a.id}`} target="_blank" rel="noreferrer">{a.fileName}</a><span className="muted small">{fSize(a.sizeBytes)}</span></div>
+            <div className="file-row">{Icon.file}<a className="fname" dir="auto" href={`/api/chat-files/${a.id}`} target="_blank" rel="noreferrer">{a.fileName}</a><span className="muted small">{fSize(a.sizeBytes)}</span></div>
           </div>
-        ) : m.text}
+        ) : <div className="btext" dir="auto">{m.text}</div>}
       </div>
       <div className="meta">
         {mine ? t("you") : m.sender === "patient" ? patientName : providerName} · {fTime(m.sentAt)}{mine && ` · ${t("sent")} ✓`}
@@ -67,7 +68,7 @@ export function Composer({ role, placeholder, onText, onFile }: { role: Viewer; 
             try { await onFile(f); } catch (err) { toast(errText(err), true); }
           }} />
         </label>
-        <textarea rows={1} value={text} placeholder={placeholder} aria-label={placeholder} maxLength={4000}
+        <textarea rows={1} dir="auto" value={text} placeholder={placeholder} aria-label={placeholder} maxLength={4000}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
         <button className="btn primary send" type="submit" disabled={busy}>{t("send")}</button>
@@ -110,7 +111,7 @@ export function HelpDialog({ help, onClose }: { help: { emergencyNumber: string;
     <Dialog title={t("helpTitle")} onClose={onClose}>
       <p>{t("helpBody")}</p>
       <HelpNumbers help={help} />
-      <p className="muted small">{t("callHint")}</p>
+      {(help.emergencyNumber || help.crisisLineNumber) && <p className="muted small">{t("callHint")}</p>}
     </Dialog>
   );
 }
@@ -126,6 +127,8 @@ export function PublicHelp() {
   );
 }
 
+const viewable = (mime: string) => mime.startsWith("image/") || mime.startsWith("audio/") || mime === "application/pdf";
+
 function watermark(text: string) {
   const col = getComputedStyle(document.documentElement).getPropertyValue("--wm").trim() || "#7F8C86";
   const esc = text.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -140,16 +143,21 @@ export function RecordViewer({ recordId, base, viewer, viewerName, patientName, 
   const { t, L, fDT, fTime, fSize, errText } = useI18n();
   const [rec, setRec] = useState<RecordView | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [images, setImages] = useState<Record<string, string>>({});
+  const [files, setFiles] = useState<Record<string, { url: string; data: ArrayBuffer }>>({});
   const [openedAt] = useState(() => new Date());
 
   useEffect(() => {
     let urls: string[] = [];
     api<RecordView>("GET", `${base}/${encodeURIComponent(recordId)}`).then(async r => {
       setRec(r);
-      for (const a of r.attachments.filter(a => a.mimeType.startsWith("image/"))) {
+      // Images, PDFs and audio open inside the viewer (watermark, blur, no download). Word files can't be shown in a browser.
+      for (const a of r.attachments.filter(a => viewable(a.mimeType))) {
         const res = await fetch(`${base}/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(a.id)}`, { credentials: "same-origin" });
-        if (res.ok) { const u = URL.createObjectURL(await res.blob()); urls.push(u); setImages(x => ({ ...x, [a.id]: u })); }
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const u = URL.createObjectURL(blob); urls.push(u);
+        const data = a.mimeType === "application/pdf" ? await blob.arrayBuffer() : new ArrayBuffer(0);
+        setFiles(x => ({ ...x, [a.id]: { url: u, data } }));
       }
     }, e => setErr(errText(e)));
     const block = (e: Event) => { if ((e.target as HTMLElement)?.closest?.("[data-protected]")) e.preventDefault(); };
@@ -164,6 +172,13 @@ export function RecordViewer({ recordId, base, viewer, viewerName, patientName, 
   }, [recordId, base, errText]);
 
   const providerName = rec ? L(rec.provider.name as Bilingual) : "";
+  // The EMR keeps the platform's system lines in English (services/chat.ts); show the known ones in the viewer's language.
+  const systemLine = (text?: string) => {
+    if (text === "Conversation started by the patient") return t("convStarted", { name: patientName });
+    if (text === "Conversation started by the provider") return t("convStarted", { name: providerName });
+    if (text?.startsWith("Outside working hours.")) return t("autoReply");
+    return <span dir="auto">{text}</span>;
+  };
   let body: ReactNode;
   if (err) body = <p className="err">{err}</p>;
   else if (!rec) body = <div className="empty"><span className="spin" />{t("loading")}</div>;
@@ -173,13 +188,19 @@ export function RecordViewer({ recordId, base, viewer, viewerName, patientName, 
       <div className="viewer-body" data-protected>
         <div className="thread">
           {rec.messages.map(m => {
-            if (m.sender === "system") return <div key={m.seq} className="sys">{m.text}</div>;
+            if (m.sender === "system") return <div key={m.seq} className="sys">{systemLine(m.text)}</div>;
             const mine = m.sender === viewer;
             const a = m.attachmentId ? rec.attachments.find(x => x.id === m.attachmentId) : undefined;
             return (
               <div key={m.seq} className={`msg${mine ? " mine" : ""}${m.risk && viewer === "provider" ? " risk" : ""}`}>
                 <div className="bubble">
-                  {a ? <div className="file">{images[a.id] && <img src={images[a.id]} alt="" draggable={false} />}<div className="file-row">{Icon.file}<span className="fname">{a.fileName}</span><span className="muted small">{fSize(a.sizeBytes)}</span></div></div> : m.text}
+                  {a ? <div className="file">
+                    <div className="file-row">{Icon.file}<span className="fname" dir="auto">{a.fileName}</span><span className="muted small">{fSize(a.sizeBytes)}</span></div>
+                    {files[a.id] && a.mimeType.startsWith("image/") && <img src={files[a.id]!.url} alt="" draggable={false} />}
+                    {files[a.id] && a.mimeType === "application/pdf" && <PdfPages data={files[a.id]!.data} />}
+                    {files[a.id] && a.mimeType.startsWith("audio/") && <AudioPlayer url={files[a.id]!.url} />}
+                    {!viewable(a.mimeType) && <p className="muted small">{t("fileInEmrOnly")}</p>}
+                  </div> : <div className="btext" dir="auto">{m.text}</div>}
                 </div>
                 <div className="meta">
                   {mine ? t("you") : m.sender === "patient" ? patientName : providerName} · {fTime(m.sentAt)}
@@ -197,7 +218,7 @@ export function RecordViewer({ recordId, base, viewer, viewerName, patientName, 
   return (
     <Dialog wide onClose={onClose}
       title={rec ? `${fDT(rec.startedAt)} – ${fTime(rec.endedAt)}` : t("loading")}
-      sub={rec && <>{providerName} · {patientName} · <span className="mono">{rec.recordName}</span></>}>
+      sub={rec && <>{providerName} · {patientName} · <span className="mono nowrap">{rec.recordName}</span></>}>
       {body}
     </Dialog>
   );

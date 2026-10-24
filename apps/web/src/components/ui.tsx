@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { useI18n } from "../i18n.tsx";
 
 const svg = (d: ReactNode) => (
@@ -14,13 +14,25 @@ export const Icon = {
   x: svg(<path d="M6 6l12 12M18 6L6 18" />)
 };
 
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),audio[controls],[tabindex]:not([tabindex="-1"])';
+
 export function Dialog({ title, sub, wide, onClose, children }: { title: ReactNode; sub?: ReactNode; wide?: boolean; onClose: () => void; children: ReactNode }) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     ref.current?.querySelector<HTMLElement>("input,textarea,button.primary,button.danger,.icon-btn")?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      // Keep keyboard focus inside the dialog: Tab from the last control goes to the first, and back.
+      if (e.key !== "Tab" || !ref.current) return;
+      const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(el => el.offsetParent !== null);
+      if (!items.length) { e.preventDefault(); return; }
+      const first = items[0]!, last = items[items.length - 1]!;
+      const inside = ref.current.contains(document.activeElement);
+      if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("keydown", onKey); prev?.focus?.(); };
   }, [onClose]);
@@ -37,6 +49,11 @@ export function Dialog({ title, sub, wide, onClose, children }: { title: ReactNo
   );
 }
 
+function ToastClose({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
+  return <button type="button" className="icon-btn toast-x" onClick={onClose} aria-label={t("close")}>{Icon.x}</button>;
+}
+
 type Toast = { text: string; bad?: boolean; id: number };
 const ToastCtx = createContext<(text: string, bad?: boolean) => void>(() => {});
 export const useToast = () => useContext(ToastCtx);
@@ -46,22 +63,38 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback((text: string, bad?: boolean) => {
     const id = Date.now();
     setToast({ text, bad, id });
-    setTimeout(() => setToast(cur => (cur?.id === id ? null : cur)), 4000);
+    // Errors stay until closed, so there is time to read them; confirmations go after 4 seconds.
+    if (!bad) setTimeout(() => setToast(cur => (cur?.id === id ? null : cur)), 4000);
   }, []);
   return (
     <ToastCtx.Provider value={show}>
       {children}
-      <div className="toast-host" aria-live="polite">{toast && <div className={`toast${toast.bad ? " bad" : ""}`} role="status">{toast.text}</div>}</div>
+      <div className="toast-host" aria-live="polite">{toast && (
+        <div className={`toast${toast.bad ? " bad" : ""}`} role={toast.bad ? "alert" : "status"}>
+          <span>{toast.text}</span>
+          {toast.bad && <ToastClose onClose={() => setToast(null)} />}
+        </div>
+      )}</div>
     </ToastCtx.Provider>
   );
 }
 
 export function Tabs({ value, onChange }: { value: "current" | "past"; onChange: (v: "current" | "past") => void }) {
   const { t } = useI18n();
+  const keys = ["current", "past"] as const;
+  // Arrow keys move between tabs (either arrow, so it works the same in right-to-left), Home and End jump.
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const i = keys.indexOf(value);
+    const next = e.key === "ArrowLeft" || e.key === "ArrowRight" ? keys[(i + 1) % keys.length] : e.key === "Home" ? keys[0] : e.key === "End" ? keys[keys.length - 1] : null;
+    if (!next) return;
+    e.preventDefault();
+    onChange(next);
+    e.currentTarget.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus();
+  };
   return (
-    <div className="tabs" role="tablist">
-      {(["current", "past"] as const).map(k => (
-        <button key={k} role="tab" type="button" aria-selected={value === k} onClick={() => onChange(k)}>{t(k === "current" ? "tabCurrent" : "tabPast")}</button>
+    <div className="tabs" role="tablist" onKeyDown={onKeyDown}>
+      {keys.map(k => (
+        <button key={k} data-tab={k} role="tab" type="button" aria-selected={value === k} tabIndex={value === k ? 0 : -1} onClick={() => onChange(k)}>{t(k === "current" ? "tabCurrent" : "tabPast")}</button>
       ))}
     </div>
   );
