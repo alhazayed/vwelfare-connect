@@ -207,6 +207,16 @@ tr:last-child td{border-bottom:0}
 .team-list{display:flex;flex-direction:column}
 .team-list li{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line)}
 .kv.kv2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.att-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:10px}
+.att-group{display:flex;flex-direction:column;gap:8px;min-width:0}
+.att-group h3{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}
+.chips.wrap{flex-wrap:wrap;overflow:visible}
+.chips.wrap li{padding:0;background:none}
+.chip-btn{border:1px solid var(--line);background:var(--sunken);color:var(--ink);border-radius:8px;min-height:36px;padding:4px 10px;font-size:13px;cursor:pointer}
+.chip-btn:hover{border-color:var(--accent)}
+@media (max-width:520px){.chip-btn{min-height:44px}}
+.date-f{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.date-f input{border:1px solid var(--field);background:var(--surface);border-radius:9px;min-height:44px;padding:9px 11px}
 .inv-box{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 .audit time{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
 .audit b{font-weight:600;display:block}

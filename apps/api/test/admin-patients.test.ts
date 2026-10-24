@@ -198,3 +198,43 @@ describe("admin provider profiles", () => {
     expect((await admin.req("DELETE", `/api/admin/providers/${omarRow.id}/patients/10482`)).json().code).toBe("no_pending_request");
   });
 });
+
+describe("admin needs-attention list and activity", () => {
+  it("lists expired invitations, locked accounts, patients without a provider and old unanswered requests", async () => {
+    const { admin, sara } = await start();
+    await onboard(sara, "10633", "mariam.s");
+    await sara.ok("POST", "/api/provider/patients", { fileNumber: "10482", mobile: "+000 0000 5678" });
+    const omarRow = await env.createStaff("provider", "omar@vwelfare.test", { emrStaffId: "ST-0200" });
+    const omar = await env.staffClient("omar@vwelfare.test");
+    await omar.ok("POST", "/api/provider/patients", { fileNumber: "10633" }); // waits for the patient
+    expect(await admin.ok("GET", "/api/admin/attention")).toMatchObject({
+      invitesExpired: [], lockedPatients: [], noProvider: [], unansweredRequests: [], stuckChats: []
+    });
+
+    env.clock.now = new Date(env.clock.now.getTime() + 8 * 86_400_000);
+    const p = new Client(env.app);
+    for (let i = 0; i < 5; i++) await p.req("POST", "/api/auth/patient/login", { username: "mariam.s", password: "wrong-password" });
+    const sid = (await env.deps.db.query.staff.findFirst({ where: (s, { eq }) => eq(s.email, "sara@vwelfare.test") }))!.id;
+    const admin2 = await env.staffClient("admin@vwelfare.test"); // the first session timed out while the clock moved
+    await admin2.ok("POST", `/api/admin/providers/${sid}/deactivate`, {});
+
+    const a = await admin2.ok("GET", "/api/admin/attention");
+    expect(a.invitesExpired).toEqual(["10482"]);
+    expect(a.lockedPatients).toEqual(["10633"]);
+    expect(a.noProvider).toEqual(["10482", "10633"]); // Sara is deactivated and Omar not yet accepted
+    expect(a.unansweredRequests).toEqual([expect.objectContaining({ fileNumber: "10633", providerId: omarRow.id })]);
+    expect(JSON.stringify(a)).not.toMatch(/Mariam|Khaled|1234|5678/);
+  });
+
+  it("shows a provider's activity and filters the activity log by day", async () => {
+    const { admin, sara } = await start();
+    await onboard(sara, "10633", "mariam.s");
+    const sid = (await admin.ok<any[]>("GET", "/api/admin/providers"))[0].id;
+    const acts = (await admin.ok<any[]>("GET", `/api/admin/providers/${sid}/activity`)).map(a => a.action);
+    expect(acts).toContain("patient_created_and_invited");
+
+    expect((await admin.ok<any[]>("GET", "/api/admin/audit?from=2026-10-21&to=2026-10-21")).length).toBeGreaterThan(0);
+    expect(await admin.ok<any[]>("GET", "/api/admin/audit?from=2026-10-22")).toEqual([]);
+    expect(await admin.ok<any[]>("GET", "/api/admin/audit?to=2026-10-20")).toEqual([]);
+  });
+});

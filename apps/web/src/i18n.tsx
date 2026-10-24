@@ -123,6 +123,12 @@ const en = {
   err_invalid_fileNumber: "Enter a file number of 3 to 12 digits.",
   err_invalid_email: "Enter a full email address, like name@example.com.",
   err_invalid_code: "Enter the 6-digit code from your authenticator app.",
+  // admin: needs attention
+  attTitle: "Needs attention", attNone: "Nothing needs attention right now.",
+  attInvitesExpired: "Patient invitation links that no longer work", attProvidersNotSetUp: "Providers whose set-up link expired",
+  attLocked: "Locked accounts", attNoProvider: "Patients with no active provider",
+  attUnanswered: "Care-team requests unanswered for more than 7 days", attStuck: "Chats not yet saved to the EMR",
+  attStuckHint: "Details are in the list of chats waiting for the EMR, further down this page.",
   // admin: provider profiles
   editDetails: "Details", saveDetails: "Save details", provSaved: "Details saved for {name}.",
   resetSignIn: "Reset sign-in", resetQ: "Reset {name}'s sign-in?",
@@ -278,6 +284,12 @@ const ar: Record<Key, string> = {
   err_invalid_fileNumber: "يُرجى إدخال رقم ملف من 3 إلى 12 رقماً.",
   err_invalid_email: "يُرجى إدخال بريد إلكتروني كامل، مثل name@example.com.",
   err_invalid_code: "يُرجى إدخال الرمز المكوّن من 6 أرقام من تطبيق المصادقة.",
+  // admin: needs attention
+  attTitle: "بحاجة إلى متابعة", attNone: "لا يوجد ما يحتاج إلى متابعة الآن.",
+  attInvitesExpired: "روابط دعوة مرضى لم تعد تعمل", attProvidersNotSetUp: "مقدمو رعاية انتهى رابط الإعداد الخاص بهم",
+  attLocked: "حسابات مقفلة", attNoProvider: "مرضى بلا مقدم رعاية نشط",
+  attUnanswered: "طلبات انضمام إلى فريق الرعاية دون رد منذ أكثر من 7 أيام", attStuck: "محادثات لم تُحفظ بعد في السجل الطبي",
+  attStuckHint: "التفاصيل في قائمة المحادثات بانتظار السجل الطبي أسفل هذه الصفحة.",
   // admin: provider profiles
   editDetails: "البيانات", saveDetails: "حفظ البيانات", provSaved: "حُفظت بيانات {name}.",
   resetSignIn: "إعادة ضبط تسجيل الدخول", resetQ: "إعادة ضبط تسجيل دخول {name}؟",
