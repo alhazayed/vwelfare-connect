@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { authenticator } from "otplib";
+import { currentCode, newMfaSecret } from "../src/lib/totp.ts";
 import { attachments, auditLog, chatSessions, messages } from "../src/db/schema.ts";
 import { addMessage, finishSession, workerTick } from "../src/services/chat.ts";
 import { Client, inviteToken, PASSWORD, setup } from "./helpers.ts";
@@ -39,7 +39,7 @@ describe("staff accounts", () => {
     expect((await p.ok("POST", "/api/auth/staff/login", { email: "new@vwelfare.test", password: PASSWORD })).next).toBe("mfa-setup");
     expect((await p.req("GET", "/api/provider/patients")).statusCode).toBe(401); // not usable before MFA
     const { secret } = await p.ok("GET", "/api/auth/staff/mfa-setup");
-    await p.ok("POST", "/api/auth/staff/mfa", { code: authenticator.generate(secret) });
+    await p.ok("POST", "/api/auth/staff/mfa", { code: currentCode(secret) });
     expect((await p.req("GET", "/api/provider/patients")).statusCode).toBe(200);
   });
 

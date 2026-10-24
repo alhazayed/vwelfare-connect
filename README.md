@@ -84,7 +84,7 @@ These are deliberately not finished. Each needs a decision or a service from Vwe
 - [ ] **Hosting.** PostgreSQL (`DATABASE_URL`) and the app in the same cloud region as the EMR, with HTTPS (`COOKIE_SECURE=true`). Set `TRUST_PROXY` to the load balancer's addresses (not needed on Vercel), or sign-in limits and the audit log see the proxy instead of the person. Build the web app with `npm run build`; serve it and proxy `/api` (including WebSockets) to the API.
 - [ ] **Emergency numbers and working hours.** Set `EMERGENCY_NUMBER` (the national emergency number; production won't start without it, and patients see it whenever the admin hasn't saved one). Set the crisis line and working hours as super admin under Chat rules. The default working days (Sunday–Thursday, 08:00–16:00) are an assumption.
 - [ ] **Password reset.** Patients currently contact the center; add a reset-by-SMS-code flow once SMS is connected.
-- [ ] **Security review.** Independent penetration test, and update the authenticator library (`otplib` 12 is deprecated in favour of 13).
+- [ ] **Security review.** Independent penetration test. (`otplib` 13, `drizzle-orm` 0.45, `zod` 4 and `vitest` 5 are in; `npm audit` was clean on 24 October 2026.)
 - [ ] **Clinical review.** Crisis wording, risk-word list, response-time promise, consent text.
 - [ ] **Backups.** Decide the retention period (backups briefly contain open chats).
 

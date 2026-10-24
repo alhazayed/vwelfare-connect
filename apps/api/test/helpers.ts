@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { authenticator } from "otplib";
+import { currentCode, newMfaSecret } from "../src/lib/totp.ts";
 import { eq } from "drizzle-orm";
 import { buildMockEmr } from "@vwelfare/mock-emr/src/app.ts";
 import { buildApp } from "../src/app.ts";
@@ -49,7 +49,7 @@ export async function setup() {
 
   const mfaSecrets = new Map<string, string>();
   async function createStaff(role: "admin" | "provider", email: string, extra: Partial<typeof staff.$inferInsert> = {}) {
-    const secret = authenticator.generateSecret();
+    const secret = newMfaSecret();
     mfaSecrets.set(email, secret);
     const [row] = await db.insert(staff).values({
       role, email, nameEn: email.split("@")[0]!, passwordHash: await hashPassword(PASSWORD),
@@ -64,7 +64,7 @@ export async function setup() {
     await db.update(staff).set({ mfaLastStep: null }).where(eq(staff.email, email));
     const c = new Client(app);
     await c.ok("POST", "/api/auth/staff/login", { email, password: PASSWORD });
-    await c.ok("POST", "/api/auth/staff/mfa", { code: authenticator.generate(mfaSecrets.get(email)!) });
+    await c.ok("POST", "/api/auth/staff/mfa", { code: currentCode(mfaSecrets.get(email)!) });
     return c;
   }
 

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { and, eq, gt, isNull, lt, or } from "drizzle-orm";
 import QRCode from "qrcode";
-import { authenticator } from "otplib";
+import { codeStep, mfaUri, newMfaSecret } from "../lib/totp.ts";
 import { authSessions, invitations, patients, staff } from "../db/schema.ts";
 import { hashPassword, sha256, verifyPassword } from "../lib/crypto.ts";
 import { HttpError, type Deps } from "../deps.ts";
@@ -71,10 +71,10 @@ export function authRoutes(app: FastifyInstance, deps: Deps) {
     if (a.staff.mfaEnabled) throw new HttpError(409, "mfa_already_set_up");
     let secret = a.staff.mfaSecretEnc ? deps.cipher.decrypt(a.staff.mfaSecretEnc) : null;
     if (!secret) {
-      secret = authenticator.generateSecret();
+      secret = newMfaSecret();
       await deps.db.update(staff).set({ mfaSecretEnc: deps.cipher.encrypt(secret) }).where(eq(staff.id, a.staff.id));
     }
-    const otpauthUrl = authenticator.keyuri(a.staff.email, "Vwelfare Connect", secret);
+    const otpauthUrl = mfaUri(a.staff.email, secret);
     return { secret, otpauthUrl, qrDataUrl: await QRCode.toDataURL(otpauthUrl) };
   });
 
@@ -102,10 +102,9 @@ export function authRoutes(app: FastifyInstance, deps: Deps) {
       throw err;
     }
 
-    // otplib checks codes against the real clock, so the time step is worked out from the real clock too.
-    const delta = authenticator.checkDelta(code, deps.cipher.decrypt(fresh.mfaSecretEnc));
-    if (delta === null) return fail(new HttpError(401, "bad_code", "That code didn't match. Check your authenticator app and try again."));
-    const step = Math.floor(Date.now() / (authenticator.allOptions().step * 1000)) + delta;
+    // Codes are checked against the real clock, as authenticator apps use it.
+    const step = codeStep(code, deps.cipher.decrypt(fresh.mfaSecretEnc));
+    if (step === null) return fail(new HttpError(401, "bad_code", "That code didn't match. Check your authenticator app and try again."));
     // Each code works once: claim its time step, so a code seen over someone's shoulder or replayed is refused.
     const claimed = await deps.db.update(staff)
       .set({ mfaLastStep: step, mfaEnabled: true, failedLogins: 0, lockedUntil: null })
