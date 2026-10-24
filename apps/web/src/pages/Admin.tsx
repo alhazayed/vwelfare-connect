@@ -74,6 +74,7 @@ const ACTIONS: Record<string, { en: string; ar: string }> = {
   provider_changed: { en: "Changed a provider's details", ar: "تعديل بيانات مقدم رعاية" },
   provider_sign_in_reset: { en: "Reset a provider's sign-in", ar: "إعادة ضبط تسجيل دخول مقدم رعاية" },
   care_team_handover: { en: "Handed over a provider's patients", ar: "نقل مرضى مقدم رعاية" },
+  report_exported: { en: "Downloaded a report", ar: "تنزيل تقرير" },
   care_team_request_cancelled: { en: "Cancelled a care team request", ar: "إلغاء طلب انضمام إلى فريق رعاية" },
   service_turned_off: { en: "Turned a service off", ar: "إيقاف خدمة" },
   service_turned_on: { en: "Turned a service on", ar: "تشغيل خدمة" },
@@ -85,17 +86,19 @@ const ACTIONS: Record<string, { en: string; ar: string }> = {
 
 export function AdminPage() {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"overview" | "patients" | "secrets">("overview");
+  const [tab, setTab] = useState<"overview" | "patients" | "reports" | "secrets">("overview");
   const [openFile, setOpenFile] = useState<string | null>(null);
   return (
     <>
       <div className="tabs" role="tablist" style={{ marginBottom: 16, borderBottom: "1px solid var(--line)" }}>
         <button role="tab" type="button" aria-selected={tab === "overview"} onClick={() => setTab("overview")}>{t("adminTabOverview")}</button>
         <button role="tab" type="button" aria-selected={tab === "patients"} onClick={() => setTab("patients")}>{t("adminTabPatients")}</button>
+        <button role="tab" type="button" aria-selected={tab === "reports"} onClick={() => setTab("reports")}>{t("adminTabReports")}</button>
         <button role="tab" type="button" aria-selected={tab === "secrets"} onClick={() => setTab("secrets")}>{t("adminTabSecrets")}</button>
       </div>
       {tab === "overview" ? <Overview onOpenPatient={f => { setOpenFile(f); setTab("patients"); }} />
-        : tab === "patients" ? <PatientsPanel initialOpen={openFile} onOpened={() => setOpenFile(null)} /> : <SecretsPanel />}
+        : tab === "patients" ? <PatientsPanel initialOpen={openFile} onOpened={() => setOpenFile(null)} />
+        : tab === "reports" ? <ReportsPanel /> : <SecretsPanel />}
     </>
   );
 }
@@ -640,5 +643,105 @@ function Attention({ version, providers, onOpenPatient, onOpenProvider }: {
         </div>
       )}
     </section>
+  );
+}
+
+type Report = {
+  from: string; to: string; timeZone: string;
+  totals: {
+    invitationsSent: number; accountsCreated: number; chatsStartedByPatients: number; chatsStartedByProviders: number; chatsSaved: number;
+    finishedAutomatically: number; afterHoursChats: number; riskFlags: number; emrDelays: number; emrRefusals: number;
+    firstReplyMedianMinutes: number | null; firstReplyP90Minutes: number | null;
+  };
+  patients: Record<PatientStatus, number>;
+  weeks: Array<{ week: string; started: number; saved: number }>;
+  providers: Array<{ id: string; nameEn: string; nameAr: string | null; active: boolean; patients: number; openChats: number; chatsSaved: number; firstReplyMedianMinutes: number | null }>;
+};
+
+function ReportsPanel() {
+  const { t, lang, fDate, fDur, errText } = useI18n();
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const r = useAsync(() => api<Report>("GET", `/api/admin/reports?from=${from}&to=${to}`), [from, to]);
+  const d = r.data;
+  const dur = (m: number | null) => m === null ? t("repNoData") : m < 60 ? t("mins", { n: m }) : fDur(m * 60_000);
+  const maxWeek = Math.max(1, ...(d?.weeks ?? []).map(w => Math.max(w.started, w.saved)));
+  const tile = (label: string, value: ReactNode, sub?: ReactNode, tone = "") => (
+    <div className={`kpi${tone ? " " + tone : ""}`}><span className="kpi-label">{label}</span><b className="kpi-value">{value}</b>{sub && <span className="muted small">{sub}</span>}</div>
+  );
+
+  return (
+    <>
+      <div className="screen-head">
+        <div><h1>{t("repTitle")}</h1><p className="muted">{t("repSub")}</p></div>
+        {d && <a className="btn" href={`/api/admin/reports.csv?from=${d.from}&to=${d.to}`} download>{t("repDownload")}</a>}
+      </div>
+      <div className="filters" style={{ marginBottom: 12 }}>
+        <label className="date-f"><span>{t("from")}</span><input type="date" value={from || d?.from || ""} max={to || d?.to || undefined} onChange={e => setFrom(e.target.value)} /></label>
+        <label className="date-f"><span>{t("to")}</span><input type="date" value={to || d?.to || ""} min={from || d?.from || undefined} onChange={e => setTo(e.target.value)} /></label>
+        {d && <span className="muted small" style={{ alignSelf: "center" }}>{t("repRange", { from: fDate(d.from), to: fDate(d.to) })}</span>}
+      </div>
+      {r.error ? <p className="err">{errText(r.error)}</p> : !d ? <div className="empty"><span className="spin" /></div> : (
+        <div className="stack">
+          <div className="kpis">
+            {tile(t("repChatsSaved"), d.totals.chatsSaved)}
+            {tile(t("repStarted"), d.totals.chatsStartedByPatients + d.totals.chatsStartedByProviders,
+              t("repStartedSplit", { p: d.totals.chatsStartedByPatients, v: d.totals.chatsStartedByProviders }))}
+            {tile(t("repFirstReply"), d.totals.firstReplyMedianMinutes === null ? "—" : dur(d.totals.firstReplyMedianMinutes),
+              d.totals.firstReplyMedianMinutes === null ? t("repNoData")
+                : t("repFirstReplySub", { m: dur(d.totals.firstReplyMedianMinutes), p: dur(d.totals.firstReplyP90Minutes) }))}
+            {tile(t("repInvites"), d.totals.invitationsSent, t("repAccounts", { n: d.totals.accountsCreated }))}
+            {tile(t("repAfterHours"), d.totals.afterHoursChats)}
+            {tile(t("repAuto"), d.totals.finishedAutomatically)}
+            {tile(t("repRisk"), d.totals.riskFlags, undefined, d.totals.riskFlags ? "warn" : "")}
+            {tile(t("repEmr"), d.totals.emrDelays + d.totals.emrRefusals, t("repEmrSplit", { d: d.totals.emrDelays, r: d.totals.emrRefusals }), d.totals.emrRefusals ? "danger" : "")}
+          </div>
+          <p className="muted small">{t("repNote")}</p>
+
+          <div className="admin-grid">
+            <section className="card pad stack">
+              <h2>{t("repWeeks")}</h2>
+              {!d.weeks.length ? <p className="muted">{t("repNoData")}</p> : (
+                <ul className="weeks">
+                  {d.weeks.map(w => (
+                    <li key={w.week}>
+                      <span className="small">{t("repWeekOf", { d: fDate(w.week) })}</span>
+                      <span className="bars">
+                        <span className="bar started" style={{ inlineSize: `${(w.started / maxWeek) * 100}%` }} /><span className="num">{w.started}</span>
+                        <span className="bar saved" style={{ inlineSize: `${(w.saved / maxWeek) * 100}%` }} /><span className="num">{w.saved}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="legend small"><span className="lg"><span className="dot started" />{t("repStarted")}</span><span className="lg"><span className="dot saved" />{t("repChatsSaved")}</span></p>
+            </section>
+            <section className="card pad stack">
+              <h2>{t("repPatients")}</h2>
+              <dl className="kv kv2">
+                <div><dt>{t("ptActive")}</dt><dd className="kpi-value">{d.patients.active}</dd></div>
+                <div><dt>{t("ptInvited")}</dt><dd className="kpi-value">{d.patients.invited}</dd></div>
+                <div><dt>{t("ptDeactivated")}</dt><dd className="kpi-value">{d.patients.deactivated}</dd></div>
+              </dl>
+            </section>
+          </div>
+
+          <section className="card table-wrap">
+            <table>
+              <thead><tr><th>{t("repProviders")}</th><th>{t("colPatients")}</th><th>{t("colOpen")}</th><th>{t("colSaved")}</th><th>{t("colMedianReply")}</th></tr></thead>
+              <tbody>
+                {d.providers.map(p => (
+                  <tr key={p.id}>
+                    <td><b>{(lang === "ar" && p.nameAr) || p.nameEn}</b>{!p.active && <> <span className="pill">{t("deactivated")}</span></>}</td>
+                    <td className="num">{p.patients}</td><td className="num">{p.openChats}</td><td className="num">{p.chatsSaved}</td>
+                    <td>{p.firstReplyMedianMinutes === null ? <span className="muted">{t("repNoData")}</span> : dur(p.firstReplyMedianMinutes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      )}
+    </>
   );
 }

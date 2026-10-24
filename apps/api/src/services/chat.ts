@@ -144,6 +144,23 @@ export async function finishSession(deps: Deps, s: SessionRow, finishedBy: Finis
   return { status: r.status === "queued" ? "queued" : "saved", recordName: s.recordName };
 }
 
+/**
+ * Numbers for the admin's reports, kept in the audit log once the chat itself is deleted:
+ * who the provider was, minutes from the patient's first message to the provider's first reply,
+ * and whether it arrived after hours. Never text, names or file contents.
+ */
+export function chatStats(s: SessionRow, rows: Array<{ sender: string; kind: string; sentAt: Date }>) {
+  const said = rows.filter(m => m.kind === "text" || m.kind === "file");
+  const firstPatient = said.find(m => m.sender === "patient");
+  const reply = firstPatient && said.find(m => m.sender === "provider" && m.sentAt >= firstPatient.sentAt);
+  return {
+    providerId: s.providerId,
+    firstReplyMinutes: firstPatient && reply ? Math.round((reply.sentAt.getTime() - firstPatient.sentAt.getTime()) / 60_000) : null,
+    afterHours: s.autoReplied,
+    risk: s.risk
+  };
+}
+
 /** Sends a locked chat to the EMR. On success, deletes every trace of its content from the platform. */
 export async function syncSession(deps: Deps, sessionId: string): Promise<{ status: "saved" | "queued" | "gone"; recordName?: string }> {
   const s = await deps.db.query.chatSessions.findFirst({ where: eq(chatSessions.id, sessionId) });
@@ -182,7 +199,9 @@ export async function syncSession(deps: Deps, sessionId: string): Promise<{ stat
       await tx.delete(chatSessions).where(eq(chatSessions.id, s.id));
     });
     await Promise.all(atts.map(a => deps.files.delete(a.storageKey)));
-    await audit(deps, { type: "system" }, "chat_saved_to_emr", s.recordName, { emrRecordId: saved.recordId, attempts: s.syncAttempts + 1 });
+    await audit(deps, { type: "system" }, "chat_saved_to_emr", s.recordName, {
+      emrRecordId: saved.recordId, attempts: s.syncAttempts + 1, ...chatStats(s, rows)
+    });
     notifyChange(deps, s);
     return { status: "saved", recordName: s.recordName };
   } catch (e) {

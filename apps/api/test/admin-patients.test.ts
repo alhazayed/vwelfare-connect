@@ -238,3 +238,36 @@ describe("admin needs-attention list and activity", () => {
     expect(await admin.ok<any[]>("GET", "/api/admin/audit?to=2026-10-20")).toEqual([]);
   });
 });
+
+describe("admin reports", () => {
+  it("counts invitations, chats, reply times and refusals without any content, and exports them as CSV", async () => {
+    const { admin, sara } = await start();
+    const patient = await onboard(sara, "10633", "mariam.s");
+    const pid = (await patient.ok("GET", "/api/patient/me")).team[0].id;
+    await patient.ok("POST", `/api/patient/providers/${pid}/chat/messages`, { text: "I can't sleep and I want to die." });
+    env.clock.now = new Date(env.clock.now.getTime() + 12 * 60_000); // inside the 15-minute staff idle limit
+    await sara.ok("POST", "/api/provider/patients/10633/chat/messages", { text: "Thank you for telling me. Let's talk." });
+    await sara.ok("POST", "/api/provider/patients/10633/chat/finish");
+
+    const admin2 = await env.staffClient("admin@vwelfare.test"); // the first session timed out while the clock moved
+    const r = await admin2.ok("GET", "/api/admin/reports");
+    expect(r.totals).toMatchObject({
+      invitationsSent: 1, accountsCreated: 1, chatsStartedByPatients: 1, chatsSaved: 1,
+      firstReplyMedianMinutes: 12, riskFlags: 1, emrRefusals: 0
+    });
+    expect(r.patients).toEqual({ invited: 0, active: 1, deactivated: 0 });
+    expect(r.providers[0]).toMatchObject({ patients: 1, openChats: 0, chatsSaved: 1, firstReplyMedianMinutes: 12 });
+    expect(r.weeks).toEqual([{ week: "2026-10-19", started: 1, saved: 1 }]);
+
+    // Outside the range there is nothing.
+    expect((await admin2.ok("GET", "/api/admin/reports?from=2026-10-22&to=2026-10-30")).totals.chatsSaved).toBe(0);
+
+    const csv = await admin2.req("GET", "/api/admin/reports.csv?from=2026-10-01&to=2026-10-31");
+    expect(csv.headers["content-type"]).toMatch(/text\/csv/);
+    expect(csv.headers["content-disposition"]).toMatch(/vwelfare-report-2026-10-01-to-2026-10-31\.csv/);
+    expect(csv.body).toMatch(/"chatsSaved","1"/);
+    expect(csv.body).not.toMatch(/sleep|want to die|Mariam|10633|1234/); // no content, no patient details
+    expect((await admin2.ok<any[]>("GET", "/api/admin/audit?q=report_exported")).length).toBe(1);
+    expect((await sara.req("GET", "/api/admin/reports")).statusCode).toBe(403);
+  });
+});
