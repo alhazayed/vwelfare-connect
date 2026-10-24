@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { authenticator } from "otplib";
+import { currentCode, newMfaSecret } from "../lib/totp.ts";
 import { createDeps } from "../bootstrap.ts";
 import { invitations, patients, providerPatients, staff } from "../db/schema.ts";
 import { hashPassword, newToken, sha256 } from "../lib/crypto.ts";
@@ -20,7 +20,7 @@ if (await db.query.staff.findFirst({ where: eq(staff.email, config.SEED_ADMIN_EM
 } else {
   const adminPw = pw(), saraPw = pw(), omarPw = pw(), laylaPw = pw();
   // Staff are enrolled in MFA already so you can sign in with `npm run otp -- <secret>`.
-  const adminOtp = authenticator.generateSecret(), saraOtp = authenticator.generateSecret(), omarOtp = authenticator.generateSecret();
+  const adminOtp = newMfaSecret(), saraOtp = newMfaSecret(), omarOtp = newMfaSecret();
   const mfa = (secret: string) => ({ mfaSecretEnc: cipher.encrypt(secret), mfaEnabled: true });
   await db.insert(staff).values({ role: "admin", email: config.SEED_ADMIN_EMAIL, nameEn: "Vwelfare Admin", nameAr: "مشرف Vwelfare", passwordHash: await hashPassword(adminPw), ...mfa(adminOtp) });
   const [sara] = await db.insert(staff).values({

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { authenticator } from "otplib";
+import { currentCode, newMfaSecret } from "../src/lib/totp.ts";
 import { desc, eq } from "drizzle-orm";
-import { auditLog } from "../src/db/schema.ts";
+import { auditLog, staff } from "../src/db/schema.ts";
 import { Client, PASSWORD, setup } from "./helpers.ts";
 
 type Env = Awaited<ReturnType<typeof setup>>;
@@ -10,7 +10,7 @@ let env: Env;
 beforeEach(async () => { env = await setup(); });
 afterEach(async () => { await env.teardown(); });
 
-const wrongCode = (secret: string) => String((Number(authenticator.generate(secret)) + 1) % 1_000_000).padStart(6, "0");
+const wrongCode = (secret: string) => String((Number(currentCode(secret)) + 1) % 1_000_000).padStart(6, "0");
 
 describe("staff sign-in", () => {
   it("locks the account after 5 wrong authenticator codes, even with the right password each time", async () => {
@@ -37,7 +37,7 @@ describe("staff sign-in", () => {
     // Codes change every 30 seconds; don't start in the last few seconds of one.
     const left = 30_000 - (Date.now() % 30_000);
     if (left < 5_000) await new Promise(r => setTimeout(r, left + 100));
-    const code = authenticator.generate(env.mfaSecrets.get("sara@vwelfare.test")!);
+    const code = currentCode(env.mfaSecrets.get("sara@vwelfare.test")!);
     const first = new Client(env.app);
     await first.ok("POST", "/api/auth/staff/login", { email: "sara@vwelfare.test", password: PASSWORD });
     await first.ok("POST", "/api/auth/staff/mfa", { code });
@@ -63,5 +63,18 @@ describe("staff sign-in", () => {
     expect(await lastIp()).toBe("203.0.113.9");
     await attempt("127.0.0.1"); // through the proxy on the same machine
     expect(await lastIp()).toBe("198.51.100.7");
+  });
+});
+
+describe("authenticator secrets from before the otplib 13 upgrade", () => {
+  it("still accepts codes for a 16-character (10-byte) secret, while new secrets are longer", async () => {
+    const legacy = "KUSRODSHCFATI3YJ";
+    await env.createStaff("provider", "old@vwelfare.test", { emrStaffId: "ST-0001" });
+    await env.deps.db.update(staff).set({ mfaSecretEnc: env.deps.cipher.encrypt(legacy), mfaLastStep: null }).where(eq(staff.email, "old@vwelfare.test"));
+    const c = new Client(env.app);
+    await c.ok("POST", "/api/auth/staff/login", { email: "old@vwelfare.test", password: PASSWORD });
+    await c.ok("POST", "/api/auth/staff/mfa", { code: currentCode(legacy) });
+    expect((await c.req("GET", "/api/provider/patients")).statusCode).toBe(200);
+    expect(newMfaSecret().length).toBeGreaterThanOrEqual(32);
   });
 });

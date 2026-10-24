@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { authenticator } from "otplib";
+import { currentCode, newMfaSecret } from "../src/lib/totp.ts";
 import { staff } from "../src/db/schema.ts";
 import { PREVIEW_ACCOUNTS, seedPreview } from "../src/services/preview-seed.ts";
 import { Client, setup } from "./helpers.ts";
@@ -30,7 +30,7 @@ describe("preview sample accounts", () => {
     const s = new Client(env.app);
     expect((await s.ok("POST", "/api/auth/staff/login", { email: PREVIEW_ACCOUNTS.providers[0], password: PW })).next).toBe("mfa-setup");
     const { secret } = await s.ok("GET", "/api/auth/staff/mfa-setup");
-    await s.ok("POST", "/api/auth/staff/mfa", { code: authenticator.generate(secret) });
+    await s.ok("POST", "/api/auth/staff/mfa", { code: currentCode(secret) });
     expect((await s.ok("GET", "/api/provider/patients")).length).toBe(1);
 
     const p = new Client(env.app);
