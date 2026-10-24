@@ -44,6 +44,7 @@ export function ProviderPage({ me }: { me: Extract<Me, { kind: "staff" }> }) {
                     {p.link === "pending" && <span className="pill warn">{t("linkPending")}</span>}
                     {p.link === "declined" && <span className="pill">{t("linkDeclined")}</span>}
                     {p.link === "accepted" && p.status === "invited" && <span className="pill warn">{t("awaiting")}</span>}
+                    {p.status === "deactivated" && <span className="pill">{t("ptDeactivated")}</span>}
                     {p.waitingForEmr && <span className="pill warn">{t("waitSync")}</span>}
                     {p.risk && <span className="pill danger">{t("riskPill")}</span>}
                     {p.openChat && (p.lastFrom === "patient" ? <span className="pill new">{t("newMsg")}</span> : <span className="pill ok">{t("chatOpen")}</span>)}
@@ -103,6 +104,7 @@ function PatientPane({ file, me, version, onBack, onChanged }: { file: string; m
         {detail.error ? <div className="empty"><p>{errText(detail.error)}</p><button className="btn" onClick={detail.reload}>{t("retry")}</button></div>
           : !d ? <div className="empty"><span className="spin" /></div>
           : d.status === "invited" ? <div className="empty">{t("invitedNote", { name, mobile: d.invitedTo ?? "" })}</div>
+          : d.status === "deactivated" && tab === "current" ? <div className="empty">{t("ptDeactivatedNote", { name })}</div>
           : tab === "current" ? <CurrentChat file={file} patientName={name} me={me} version={version} onChanged={onChanged} />
           : <PastChats file={file} patientName={name} me={me} version={version} />}
       </div>

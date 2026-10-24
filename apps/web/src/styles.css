@@ -203,6 +203,11 @@ tr:last-child td{border-bottom:0}
 .filters select{width:auto}
 .audit{display:flex;flex-direction:column;margin-top:10px;max-height:520px;overflow-y:auto}
 .audit li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.row-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.team-list{display:flex;flex-direction:column}
+.team-list li{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line)}
+.kv.kv2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.inv-box{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 .audit time{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
 .audit b{font-weight:600;display:block}
 @media (max-width:520px){.audit li{grid-template-columns:minmax(0,1fr)}}
