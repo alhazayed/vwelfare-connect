@@ -68,6 +68,10 @@ const ACTIONS: Record<string, { en: string; ar: string }> = {
   account_unlocked: { en: "Unlocked an account", ar: "إلغاء قفل حساب" },
   patient_deactivated: { en: "Deactivated a patient account", ar: "تعطيل حساب مريض" },
   patient_reactivated: { en: "Reactivated a patient account", ar: "إعادة تفعيل حساب مريض" },
+  provider_changed: { en: "Changed a provider's details", ar: "تعديل بيانات مقدم رعاية" },
+  provider_sign_in_reset: { en: "Reset a provider's sign-in", ar: "إعادة ضبط تسجيل دخول مقدم رعاية" },
+  care_team_handover: { en: "Handed over a provider's patients", ar: "نقل مرضى مقدم رعاية" },
+  care_team_request_cancelled: { en: "Cancelled a care team request", ar: "إلغاء طلب انضمام إلى فريق رعاية" },
   service_turned_off: { en: "Turned a service off", ar: "إيقاف خدمة" },
   service_turned_on: { en: "Turned a service on", ar: "تشغيل خدمة" },
   service_added: { en: "Added a service", ar: "إضافة خدمة" },
@@ -98,6 +102,7 @@ function Overview() {
   const providers = useAsync(() => api<ProviderRow[]>("GET", "/api/admin/providers"), [version]);
   const [adding, setAdding] = useState(false);
   const [deact, setDeact] = useState<ProviderRow | null>(null);
+  const [managing, setManaging] = useState<ProviderRow | null>(null);
   const name = (p: ProviderRow) => (lang === "ar" && p.nameAr) || p.nameEn;
   const run = async (url: string, done?: string) => {
     try { await api("POST", url); if (done) toast(done); setVersion(v => v + 1); } catch (e) { toast(errText(e), true); }
@@ -124,6 +129,7 @@ function Overview() {
                 <td>{!p.active ? <span className="pill">{t("deactivated")}</span> : !p.hasPassword || !p.mfaEnabled ? <span className="pill warn">{t("setupPending")}</span> : <span className="pill ok">{t("active")}</span>}
                   {p.locked && <> <span className="pill danger">{t("ptLocked")}</span></>}</td>
                 <td><div className="row-actions">
+                  <button className="btn small" onClick={() => setManaging(p)}>{t("manage")}</button>
                   {p.active && !p.hasPassword && <button className="btn small" onClick={() => run(`/api/admin/providers/${p.id}/resend-invite`, t("provResent", { email: p.email }))}>{t("resendInvite")}</button>}
                   {p.locked && <button className="btn small" onClick={() => run(`/api/admin/providers/${p.id}/unlock`, t("unlocked"))}>{t("unlock")}</button>}
                   {p.active
@@ -140,6 +146,7 @@ function Overview() {
         <RulesForm />
         <AuditLog version={version} />
       </div>
+      {managing && <ProviderDialog p={managing} all={providers.data ?? []} onClose={() => setManaging(null)} onChanged={() => setVersion(v => v + 1)} />}
       {deact && <DeactivateDialog p={deact} name={name(deact)} onClose={() => setDeact(null)} onDone={() => { setDeact(null); setVersion(v => v + 1); }} />}
     </>
   );
@@ -476,6 +483,91 @@ function PatientDialog({ file, pill, onClose, onChanged }: { file: string; pill:
           </section>
         </div>
       )}
+    </Dialog>
+  );
+}
+
+function ProviderDialog({ p, all, onClose, onChanged }: { p: ProviderRow; all: ProviderRow[]; onClose: () => void; onChanged: () => void }) {
+  const { t, lang, errText } = useI18n();
+  const toast = useToast();
+  const pName = (x: { nameEn: string; nameAr: string | null }) => (lang === "ar" && x.nameAr) || x.nameEn;
+  const [f, setF] = useState({ nameEn: p.nameEn, nameAr: p.nameAr ?? "", specialtyEn: p.specialtyEn ?? "", specialtyAr: p.specialtyAr ?? "", email: p.email, emrStaffId: p.emrStaffId ?? "" });
+  const [version, setVersion] = useState(0);
+  const list = useAsync(() => api<Array<{ fileNumber: string; link: "pending" | "accepted" | "declined"; status: PatientStatus }>>("GET", `/api/admin/providers/${p.id}/patients`), [p.id, version]);
+  const [to, setTo] = useState("");
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const others = all.filter(x => x.id !== p.id && x.active);
+
+  async function act(method: "POST" | "PUT" | "DELETE", url: string, body: unknown, done: (r: any) => string) {
+    setBusy(true); setErr("");
+    try { const r = await api<any>(method, url, body); toast(done(r)); setConfirmReset(false); setVersion(v => v + 1); onChanged(); }
+    catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  const field = (k: keyof typeof f, label: string, ltr = false, type = "text") => (
+    <label className="fld"><span>{label}</span><input type={type} dir={ltr ? "ltr" : undefined} autoComplete="off" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} /></label>
+  );
+
+  return (
+    <Dialog wide title={pName(p)} sub={<span className="mono">{p.email}</span>} onClose={() => { if (!busy) onClose(); }}>
+      <div className="stack">
+        <form className="inv-box stack" onSubmit={e => { e.preventDefault(); act("PUT", `/api/admin/providers/${p.id}`, f, () => t("provSaved", { name: f.nameEn })); }}>
+          <h3>{t("editDetails")}</h3>
+          <div className="grid3">
+            {field("nameEn", t("nameEn"))}{field("nameAr", t("nameAr"))}{field("email", t("email"), true, "email")}
+            {field("specialtyEn", t("specEn"))}{field("specialtyAr", t("specAr"))}{field("emrStaffId", t("emrStaffId"), true)}
+          </div>
+          <div className="actions"><button className="btn primary" disabled={busy}>{t("saveDetails")}</button></div>
+        </form>
+
+        {p.active && (confirmReset ? (
+          <div className="note danger stack" role="alert">
+            <b>{t("resetQ", { name: pName(p) })}</b>
+            <p>{t("resetBody", { email: p.email })}</p>
+            <div className="actions">
+              <button className="btn" disabled={busy} onClick={() => setConfirmReset(false)}>{t("cancel")}</button>
+              <button className="btn danger" disabled={busy} onClick={() => act("POST", `/api/admin/providers/${p.id}/reset-sign-in`, {}, () => t("resetDone", { email: p.email }))}>{t("resetSignIn")}</button>
+            </div>
+          </div>
+        ) : (
+          <div className="actions"><button className="btn" disabled={busy} onClick={() => setConfirmReset(true)}>{t("resetSignIn")}</button></div>
+        ))}
+
+        <section className="stack">
+          <h3>{t("provPatientsTitle")}</h3>
+          {list.error ? <p className="err">{errText(list.error)}</p> : !list.data ? <span className="spin" />
+            : !list.data.length ? <p className="muted">{t("provPatientsNone")}</p> : (
+            <ul className="team-list">
+              {list.data.map(r => (
+                <li key={r.fileNumber}>
+                  <div><span className="mono">{r.fileNumber}</span> {r.status === "deactivated" && <span className="pill">{t("ptDeactivated")}</span>}</div>
+                  <div className="row-actions">
+                    {r.link === "accepted" ? <span className="pill ok">{t("linkAccepted")}</span> : r.link === "pending" ? <span className="pill warn">{t("linkPending")}</span> : <span className="pill">{t("linkDeclined")}</span>}
+                    {r.link === "pending" && <button className="btn small" disabled={busy} onClick={() => act("DELETE", `/api/admin/providers/${p.id}/patients/${r.fileNumber}`, undefined, () => t("requestCancelled", { n: r.fileNumber }))}>{t("cancelRequest")}</button>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {!!list.data?.some(r => r.link === "accepted") && (
+          <form className="inv-box stack" onSubmit={e => { e.preventDefault(); if (to) act("POST", `/api/admin/providers/${p.id}/handover`, { toProviderId: to }, r => t("handoverDone", { r: r.requested, a: r.already, s: r.skipped })); }}>
+            <h3>{t("handoverTitle")}</h3>
+            <p className="muted small">{t("handoverSub", { name: pName(p) })}</p>
+            <label className="fld"><span>{t("handoverTo")}</span>
+              <select value={to} onChange={e => setTo(e.target.value)}>
+                <option value="">{t("chooseProvider")}</option>
+                {others.map(x => <option key={x.id} value={x.id}>{pName(x)}</option>)}
+              </select>
+            </label>
+            <div className="actions"><button className="btn primary" disabled={busy || !to}>{t("handoverGo")}</button></div>
+          </form>
+        )}
+        {err && <p className="err" role="alert">{err}</p>}
+      </div>
     </Dialog>
   );
 }

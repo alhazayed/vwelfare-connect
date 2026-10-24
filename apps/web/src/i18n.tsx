@@ -123,6 +123,16 @@ const en = {
   err_invalid_fileNumber: "Enter a file number of 3 to 12 digits.",
   err_invalid_email: "Enter a full email address, like name@example.com.",
   err_invalid_code: "Enter the 6-digit code from your authenticator app.",
+  // admin: provider profiles
+  editDetails: "Details", saveDetails: "Save details", provSaved: "Details saved for {name}.",
+  resetSignIn: "Reset sign-in", resetQ: "Reset {name}'s sign-in?",
+  resetBody: "The password and authenticator stop working at once, and the account is signed out. A new set-up link goes to {email}. Use this when a phone is lost or a password is forgotten.",
+  resetDone: "Sign-in reset. A new set-up link went to {email}.",
+  provPatientsTitle: "Patients", provPatientsNone: "No patients yet.", cancelRequest: "Cancel request", requestCancelled: "Request for file {n} cancelled.",
+  handoverTitle: "Hand over patients", handoverSub: "Each patient of {name} gets a request to add the provider you choose. The new provider joins the care team only when the patient accepts.",
+  handoverTo: "New provider", handoverGo: "Send requests", chooseProvider: "Choose a provider",
+  handoverDone: "{r} requests sent. {a} patients already had this provider or a waiting request. {s} deactivated patients skipped.",
+  err_bad_handover: "Choose another active provider.",
   // admin: patients
   adminTabPatients: "Patients", ptTitle: "Patients",
   ptSub: "Every patient account on the platform, by EMR file number. Names and visit dates stay in the EMR.",
@@ -268,6 +278,16 @@ const ar: Record<Key, string> = {
   err_invalid_fileNumber: "يُرجى إدخال رقم ملف من 3 إلى 12 رقماً.",
   err_invalid_email: "يُرجى إدخال بريد إلكتروني كامل، مثل name@example.com.",
   err_invalid_code: "يُرجى إدخال الرمز المكوّن من 6 أرقام من تطبيق المصادقة.",
+  // admin: provider profiles
+  editDetails: "البيانات", saveDetails: "حفظ البيانات", provSaved: "حُفظت بيانات {name}.",
+  resetSignIn: "إعادة ضبط تسجيل الدخول", resetQ: "إعادة ضبط تسجيل دخول {name}؟",
+  resetBody: "تتوقف كلمة المرور وتطبيق المصادقة فوراً ويُسجَّل الخروج من الحساب. يُرسل رابط إعداد جديد إلى {email}. يُستخدم هذا عند فقدان الهاتف أو نسيان كلمة المرور.",
+  resetDone: "أُعيد ضبط تسجيل الدخول. أُرسل رابط إعداد جديد إلى {email}.",
+  provPatientsTitle: "المرضى", provPatientsNone: "لا يوجد مرضى بعد.", cancelRequest: "إلغاء الطلب", requestCancelled: "أُلغي الطلب للملف {n}.",
+  handoverTitle: "نقل المرضى", handoverSub: "يتلقى كل مريض لدى {name} طلباً لإضافة مقدم الرعاية المختار. لا ينضم مقدم الرعاية الجديد إلى فريق الرعاية إلا بعد موافقة المريض.",
+  handoverTo: "مقدم الرعاية الجديد", handoverGo: "إرسال الطلبات", chooseProvider: "اختيار مقدم رعاية",
+  handoverDone: "أُرسلت الطلبات ({r}). لدى {a} مرضى مقدم الرعاية هذا أو طلب بانتظار الرد. تم تخطي المرضى المعطَّلين ({s}).",
+  err_bad_handover: "يلزم اختيار مقدم رعاية آخر نشط.",
   // admin: patients
   adminTabPatients: "المرضى", ptTitle: "المرضى",
   ptSub: "جميع حسابات المرضى على المنصة حسب رقم الملف في السجل الطبي. تبقى الأسماء وتواريخ الزيارات في السجل الطبي.",
