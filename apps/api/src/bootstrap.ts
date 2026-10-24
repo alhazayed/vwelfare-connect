@@ -34,7 +34,8 @@ export async function createDeps(config: Config = loadConfig()): Promise<{ deps:
     files: new EncryptedDiskStore(join(config.dataDir, "files"), cipher),
     scanner: noScan,
     emr: emrFromSecrets(secrets, config),
-    notifier: new ConsoleNotifier(),
+    // Full text only on a developer's own machine; masked on Vercel and in production.
+    notifier: new ConsoleNotifier(console.log, !config.VERCEL && !config.production && process.env.NODE_ENV !== "production"),
     hub: new Hub(),
     now: () => new Date()
   };

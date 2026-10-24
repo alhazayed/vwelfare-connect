@@ -4,6 +4,7 @@ import { api, type Bilingual } from "../api.ts";
 import { useI18n } from "../i18n.tsx";
 import { TopBar } from "../components/TopBar.tsx";
 import { useToast } from "../components/ui.tsx";
+import { PublicHelp } from "../components/chat.tsx";
 
 /** Links put the token after "#" so it never reaches a server. Older links had it in the path. */
 function useInviteToken() {
@@ -90,6 +91,7 @@ export function PatientInvite({ onDone }: { onDone: () => Promise<void> }) {
             <button className="btn primary block" disabled={busy}>{t("createAccount")}</button>
           </form>
         )}
+        <PublicHelp />
       </div></div>
     </>
   );

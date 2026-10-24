@@ -177,6 +177,7 @@ export async function syncSession(deps: Deps, sessionId: string): Promise<{ stat
     startedAt: isoLocal(s.startedAt, tz),
     endedAt: isoLocal(s.endedAt ?? deps.now(), tz),
     finishedBy: s.finishedBy ?? "provider",
+    risk: s.risk,
     messages: rows.map(m => ({
       seq: m.seq,
       sentAt: isoLocal(m.sentAt, tz),
@@ -185,7 +186,8 @@ export async function syncSession(deps: Deps, sessionId: string): Promise<{ stat
         : m.kind === "started" ? `Conversation started by the ${s.startedBy}`
         : m.kind === "afterhours" ? AUTO_REPLY_EN
         : undefined,
-      attachmentId: m.attachmentId ?? undefined
+      attachmentId: m.attachmentId ?? undefined,
+      ...(m.risk ? { risk: true } : {})
     })),
     attachments: atts.map(a => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, sizeBytes: a.sizeBytes, sha256: a.sha256 }))
   };

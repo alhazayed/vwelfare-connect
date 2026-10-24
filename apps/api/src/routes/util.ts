@@ -42,6 +42,7 @@ export function recordView(r: EmrRecord, providerName: { en: string; ar?: string
     provider: { staffId: r.provider.staffId, name: providerName ?? { en: r.provider.name } },
     startedAt: r.startedAt,
     endedAt: r.endedAt,
+    risk: !!r.risk,
     messages: r.messages,
     attachments: r.attachments
   };

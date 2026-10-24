@@ -45,8 +45,8 @@ export type RecordSummary = {
 
 export type RecordView = {
   recordId: string; recordName: string; fileNumber: string; provider: { staffId: string; name: Bilingual };
-  startedAt: string; endedAt: string;
-  messages: Array<{ seq: number; sentAt: string; sender: "patient" | "provider" | "system"; text?: string; attachmentId?: string }>;
+  startedAt: string; endedAt: string; risk: boolean;
+  messages: Array<{ seq: number; sentAt: string; sender: "patient" | "provider" | "system"; text?: string; attachmentId?: string; risk?: boolean }>;
   attachments: Array<{ id: string; fileName: string; mimeType: string; sizeBytes: number }>;
 };
 

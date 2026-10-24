@@ -29,6 +29,9 @@ const schema = z.object({
   EMR_ALLOWED_HOSTS: z.string().optional().transform(v => (v ?? "").split(",").map(h => h.trim().toLowerCase()).filter(Boolean)),
   EMR_CLIENT_ID: z.string().default("vwelfare-connect"),
   EMR_CLIENT_SECRET: z.string().default("dev-secret"),
+  // The national emergency number. Patients see it whenever the admin hasn't saved one (or cleared it), so the crisis
+  // panel never shows an empty number. Required in production.
+  EMERGENCY_NUMBER: z.string().trim().max(20).regex(/^[\d+ ]*$/, "EMERGENCY_NUMBER may only contain digits, spaces and +").optional().transform(v => v || undefined),
   SEED_ADMIN_EMAIL: z.string().email().default("admin@vwelfare.example"),
   // Preview deployments only: adds sample accounts with this password (see services/preview-seed.ts).
   PREVIEW_SEED_PASSWORD: z.string().optional().transform(v => v || undefined).pipe(z.string().min(12, "PREVIEW_SEED_PASSWORD must be at least 12 characters").optional())
@@ -47,6 +50,7 @@ export function loadConfig(overrides: Partial<Record<keyof z.input<typeof schema
   if (production && !parsed.EMR_BASE_URL) throw new Error("EMR_BASE_URL must be set in production. The mock EMR is never used there.");
   const EMR_BASE_URL = parsed.EMR_BASE_URL ?? (production ? undefined : parsed.MOCK_EMR_URL) ?? "http://localhost:4100";
   if (production && new URL(EMR_BASE_URL).protocol !== "https:") throw new Error("EMR_BASE_URL must use https in production.");
+  if (production && !parsed.EMERGENCY_NUMBER) throw new Error("EMERGENCY_NUMBER must be set in production: patients in crisis must always see a number to call.");
   const EMR_ALLOWED_HOSTS = parsed.EMR_ALLOWED_HOSTS.length ? parsed.EMR_ALLOWED_HOSTS : [new URL(EMR_BASE_URL).host.toLowerCase()];
   const TRUST_PROXY = parsed.TRUST_PROXY ?? (parsed.VERCEL ? true : ["127.0.0.1", "::1"]);
   return { ...parsed, EMR_BASE_URL, EMR_ALLOWED_HOSTS, TRUST_PROXY, production, dataDir: resolve(repoRoot, parsed.DATA_DIR) };

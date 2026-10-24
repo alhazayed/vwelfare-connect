@@ -4,7 +4,7 @@ import { loadConfig } from "../src/config.ts";
 import { setup } from "./helpers.ts";
 
 const key = randomBytes(32).toString("base64");
-const base = { FIELD_ENCRYPTION_KEY: key, DATABASE_URL: "", EMR_BASE_URL: "", MOCK_EMR_URL: "", CRON_SECRET: "", VERCEL: "", VERCEL_ENV: "", EMR_ALLOWED_HOSTS: "", TRUST_PROXY: "" };
+const base = { FIELD_ENCRYPTION_KEY: key, DATABASE_URL: "", EMR_BASE_URL: "", MOCK_EMR_URL: "", CRON_SECRET: "", VERCEL: "", VERCEL_ENV: "", EMR_ALLOWED_HOSTS: "", TRUST_PROXY: "", EMERGENCY_NUMBER: "" };
 
 describe("Vercel configuration", () => {
   it("uses the bound mock EMR outside production only", () => {
@@ -12,6 +12,13 @@ describe("Vercel configuration", () => {
     expect(loadConfig({ ...base, MOCK_EMR_URL: "http://mock.internal", EMR_BASE_URL: "https://emr.example" }).EMR_BASE_URL).toBe("https://emr.example");
     expect(() => loadConfig({ ...base, VERCEL_ENV: "production", MOCK_EMR_URL: "http://mock.internal" })).toThrow(/EMR_BASE_URL/);
     expect(() => loadConfig({ ...base, VERCEL_ENV: "production", EMR_BASE_URL: "http://emr.example" })).toThrow(/https/);
+  });
+
+  it("refuses to start in production without the national emergency number", () => {
+    const prod = { ...base, VERCEL_ENV: "production", EMR_BASE_URL: "https://emr.example" };
+    expect(() => loadConfig(prod)).toThrow(/EMERGENCY_NUMBER/);
+    expect(() => loadConfig({ ...prod, EMERGENCY_NUMBER: "call me" })).toThrow(/EMERGENCY_NUMBER/);
+    expect(loadConfig({ ...prod, EMERGENCY_NUMBER: "999" }).EMERGENCY_NUMBER).toBe("999");
   });
 
   it("allows only the environment's EMR host unless EMR_ALLOWED_HOSTS lists more", () => {

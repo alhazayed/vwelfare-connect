@@ -19,7 +19,8 @@ export type StoredRecord = {
   startedAt: string;
   endedAt: string;
   finishedBy: "provider" | "auto" | "deactivation";
-  messages: Array<{ seq: number; sentAt: string; sender: "patient" | "provider" | "system"; text?: string; attachmentId?: string }>;
+  risk?: boolean;
+  messages: Array<{ seq: number; sentAt: string; sender: "patient" | "provider" | "system"; text?: string; attachmentId?: string; risk?: boolean }>;
   attachments: StoredAttachment[];
 };
 
