@@ -47,7 +47,13 @@ const ACTIONS: Record<string, { en: string; ar: string }> = {
   secret_revealed: { en: "Viewed a secret", ar: "عرض سر" },
   secret_cleared: { en: "Cleared a saved setting", ar: "مسح إعداد محفوظ" },
   secret_deleted: { en: "Deleted a secret", ar: "حذف سر" },
-  emr_connection_tested: { en: "Tested the EMR connection", ar: "اختبار الاتصال بالسجل الطبي" }
+  emr_connection_tested: { en: "Tested the EMR connection", ar: "اختبار الاتصال بالسجل الطبي" },
+  service_turned_off: { en: "Turned a service off", ar: "إيقاف خدمة" },
+  service_turned_on: { en: "Turned a service on", ar: "تشغيل خدمة" },
+  service_added: { en: "Added a service", ar: "إضافة خدمة" },
+  service_changed: { en: "Changed a service", ar: "تعديل خدمة" },
+  service_deleted: { en: "Deleted a service and its secrets", ar: "حذف خدمة وأسرارها" },
+  service_tested: { en: "Tested a service connection", ar: "اختبار الاتصال بخدمة" }
 };
 
 export function AdminPage() {
@@ -115,11 +121,12 @@ function SyncQueue({ version }: { version: number }) {
   const toast = useToast();
   const [mine, setMine] = useState(0);
   const rows = useAsync(() => api<QueueRow[]>("GET", "/api/admin/sync-queue"), [version, mine]);
-  // lastError is a short code from the server: "emr_unavailable", or "rejected_<status>_<EMR code>".
+  // lastError is a short code from the server: "emr_unavailable", "emr_off" (the admin switched the EMR off), or "rejected_<status>_<EMR code>".
   const state = (r: QueueRow) => {
     const refused = r.lastError?.match(/^rejected_(\d+)_(.+)$/);
     if (refused) return <><span className="pill danger">{t("syncRefused")}</span> <span className="mono small">{refused[1]} {refused[2]}</span></>;
     if (r.lastError === "emr_unavailable") return <span className="pill warn">{t("syncWaiting")}</span>;
+    if (r.lastError === "emr_off") return <span className="pill warn">{t("syncOff")}</span>;
     if (r.lastError) return <span className="pill warn">{t("syncFailed")}</span>;
     return <span className="pill">{t("syncSending")}</span>;
   };

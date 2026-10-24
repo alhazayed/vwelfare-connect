@@ -6,7 +6,7 @@ import { baseRecordName, isoLocal, isWithinWorkingHours } from "../lib/time.ts";
 import { hasRiskWords } from "../lib/risk.ts";
 import { sha256 } from "../lib/crypto.ts";
 import { patientKey, staffKey } from "../realtime.ts";
-import { EmrRejected, EmrUnavailable, type EmrRecord } from "../emr/client.ts";
+import { EmrRejected, EmrTurnedOff, EmrUnavailable, type EmrRecord } from "../emr/client.ts";
 import { audit, type Actor } from "./audit.ts";
 import { getRules } from "./rules.ts";
 
@@ -186,6 +186,13 @@ export async function syncSession(deps: Deps, sessionId: string): Promise<{ stat
     notifyChange(deps, s);
     return { status: "saved", recordName: s.recordName };
   } catch (e) {
+    if (e instanceof EmrTurnedOff) {
+      // Not an attempt: nothing was sent. The chat waits, locked, until the admin turns the EMR back on; the worker
+      // leaves it alone meanwhile and sends it on its first run after that (nextAttemptAt null = due).
+      await deps.db.update(chatSessions).set({ nextAttemptAt: null, lastError: "emr_off" }).where(eq(chatSessions.id, s.id));
+      if (s.lastError !== "emr_off") await audit(deps, { type: "system" }, "chat_sync_queued", s.recordName, { reason: "emr_off" });
+      return { status: "queued", recordName: s.recordName };
+    }
     const attempts = s.syncAttempts + 1;
     const rejected = e instanceof EmrRejected;
     const reason = rejected ? `rejected_${e.status}_${e.code}` : e instanceof EmrUnavailable ? "emr_unavailable" : "sync_failed";
@@ -238,6 +245,8 @@ export async function workerTick(deps: Deps) {
     .where(and(eq(chatSessions.status, "locked"), isNull(chatSessions.alertedAt), lt(chatSessions.endedAt, new Date(now.getTime() - QUEUE_ALERT_MS))));
   for (const s of waiting) await alertAdmins(deps, s.id, s.recordName, s.lastError ?? "waiting");
 
+  // While the admin has the EMR switched off, nothing is sent; chats stay locked and are picked up once it's back on.
+  if (!(await deps.secrets.isEnabled("emr"))) return;
   // Claim each due chat (take the lease) before sending, so two workers or a worker and a request never send it together.
   const due = await deps.db.update(chatSessions)
     .set({ nextAttemptAt: new Date(now.getTime() + LEASE_MS) })

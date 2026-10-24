@@ -59,7 +59,13 @@ img{max-width:100%}
 .icon-btn{border:0;background:transparent;border-radius:8px;width:40px;height:40px;display:grid;place-items:center;cursor:pointer;color:var(--muted);flex:none}
 .icon-btn:hover{background:var(--sunken);color:var(--ink)}
 .icon-btn svg{width:18px;height:18px}
-@media (pointer:coarse),(max-width:640px){.btn,.btn.small,.tabs button,select{min-height:44px}.icon-btn{width:44px;height:44px}}
+.switch{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;cursor:pointer;min-height:40px;padding:0 4px;color:var(--ink);font-size:14px;font-weight:500;font-family:inherit}
+.switch .track{width:42px;height:24px;border-radius:99px;background:var(--sunken);border:1px solid var(--field);position:relative;flex:none;transition:background .15s}
+.switch .track::after{content:"";position:absolute;top:2px;inset-inline-start:2px;width:18px;height:18px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.3);transition:inset-inline-start .15s}
+.switch[aria-checked="true"] .track{background:var(--accent);border-color:var(--accent)}
+.switch[aria-checked="true"] .track::after{inset-inline-start:20px}
+.switch:disabled{opacity:.5;cursor:not-allowed}
+@media (pointer:coarse),(max-width:640px){.btn,.btn.small,.tabs button,select,.switch{min-height:44px}.icon-btn{width:44px;height:44px}}
 
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:inset 0 1px 0 var(--glass-edge),0 10px 30px -18px rgba(40,32,120,.35)}
 .pad{padding:16px}

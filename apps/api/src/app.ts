@@ -7,7 +7,7 @@ import websocket from "@fastify/websocket";
 import { ZodError } from "zod";
 import { HttpError, type Deps } from "./deps.ts";
 import { registerAuth } from "./auth.ts";
-import { EmrUnavailable } from "./emr/client.ts";
+import { EmrTurnedOff, EmrUnavailable } from "./emr/client.ts";
 import { MAX_FILE_BYTES } from "./lib/files.ts";
 import { patientKey, staffKey } from "./realtime.ts";
 import { workerTick } from "./services/chat.ts";
@@ -36,6 +36,9 @@ export async function buildApp(deps: Deps, opts: { logger?: boolean } = {}) {
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message });
     // `field` names the first input that failed, so the app can show that field's rule in the person's language.
     if (err instanceof ZodError) return reply.code(400).send({ code: "invalid_input", message: err.issues[0]?.message ?? "Invalid input", field: String(err.issues[0]?.path[0] ?? ""), issues: err.issues });
+    if (err instanceof EmrTurnedOff) {
+      return reply.code(503).send({ code: "emr_off", message: "The connection to the medical record is paused by an administrator. Try again later." });
+    }
     if (err instanceof EmrUnavailable) {
       req.log.warn({ err: err.message }, "EMR unavailable");
       return reply.code(503).send({ code: "emr_unavailable", message: "The EMR isn't responding right now. Try again in a moment." });
