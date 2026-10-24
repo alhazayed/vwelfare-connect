@@ -26,9 +26,11 @@ export const DEFAULT_RULES: Rules = {
   workingHours: { days: [0, 1, 2, 3, 4], start: "08:00", end: "16:00" }
 };
 
-export async function getRules(deps: Pick<Deps, "db">): Promise<Rules> {
+export async function getRules(deps: Pick<Deps, "db" | "config">): Promise<Rules> {
   const row = await deps.db.query.settings.findFirst({ where: eq(settings.key, "rules") });
-  return row ? { ...DEFAULT_RULES, ...(row.value as Partial<Rules>) } : DEFAULT_RULES;
+  const rules = row ? { ...DEFAULT_RULES, ...(row.value as Partial<Rules>) } : DEFAULT_RULES;
+  // Patients must always have a number to call: fall back to the national emergency number from the environment.
+  return { ...rules, emergencyNumber: rules.emergencyNumber || deps.config.EMERGENCY_NUMBER || "" };
 }
 
 export async function saveRules(deps: Pick<Deps, "db">, rules: Rules) {

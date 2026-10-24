@@ -78,15 +78,17 @@ export function Composer({ role, placeholder, onText, onFile }: { role: Viewer; 
 
 export const fileForm = (f: File) => { const fd = new FormData(); fd.append("file", f); return fd; };
 
+/** Only numbers that are set: a patient in crisis never sees an empty entry. The server falls back to EMERGENCY_NUMBER. */
 export function HelpNumbers({ help }: { help: { emergencyNumber: string; crisisLineNumber: string } }) {
   const { t } = useI18n();
-  const rows = [["emServices", help.emergencyNumber], ["crisisLine", help.crisisLineNumber]] as const;
+  const rows = ([["emServices", help.emergencyNumber], ["crisisLine", help.crisisLineNumber]] as const).filter(([, num]) => num);
+  if (!rows.length) return <p className="help-none"><b>{t("noNumbers")}</b></p>;
   return (
     <ul className="help-list">
       {rows.map(([k, num]) => (
         <li key={k}>
-          <div><b>{t(k)}</b>{num ? <span className="mono help-num">{num}</span> : <span className="muted small">{t("numberMissing")}</span>}</div>
-          {num && <a className="btn primary call" href={`tel:${num.replace(/\s/g, "")}`}>{Icon.phone}{t("call")}</a>}
+          <div><b>{t(k)}</b><span className="mono help-num">{num}</span></div>
+          <a className="btn primary call" href={`tel:${num.replace(/\s/g, "")}`}>{Icon.phone}{t("call")}</a>
         </li>
       ))}
     </ul>
@@ -110,6 +112,17 @@ export function HelpDialog({ help, onClose }: { help: { emergencyNumber: string;
       <HelpNumbers help={help} />
       <p className="muted small">{t("callHint")}</p>
     </Dialog>
+  );
+}
+
+/** "Need urgent help?" for screens before sign-in (sign-in, invitation). Loads the numbers when pressed. */
+export function PublicHelp() {
+  const [help, setHelp] = useState<{ emergencyNumber: string; crisisLineNumber: string } | null>(null);
+  return (
+    <>
+      <HelpButton onClick={() => api<{ emergencyNumber: string; crisisLineNumber: string }>("GET", "/api/public/help").then(setHelp, () => setHelp({ emergencyNumber: "", crisisLineNumber: "" }))} />
+      {help && <HelpDialog help={help} onClose={() => setHelp(null)} />}
+    </>
   );
 }
 
@@ -164,11 +177,14 @@ export function RecordViewer({ recordId, base, viewer, viewerName, patientName, 
             const mine = m.sender === viewer;
             const a = m.attachmentId ? rec.attachments.find(x => x.id === m.attachmentId) : undefined;
             return (
-              <div key={m.seq} className={`msg${mine ? " mine" : ""}`}>
+              <div key={m.seq} className={`msg${mine ? " mine" : ""}${m.risk && viewer === "provider" ? " risk" : ""}`}>
                 <div className="bubble">
                   {a ? <div className="file">{images[a.id] && <img src={images[a.id]} alt="" draggable={false} />}<div className="file-row">{Icon.file}<span className="fname">{a.fileName}</span><span className="muted small">{fSize(a.sizeBytes)}</span></div></div> : m.text}
                 </div>
-                <div className="meta">{mine ? t("you") : m.sender === "patient" ? patientName : providerName} · {fTime(m.sentAt)}</div>
+                <div className="meta">
+                  {mine ? t("you") : m.sender === "patient" ? patientName : providerName} · {fTime(m.sentAt)}
+                  {m.risk && viewer === "provider" && <> · <span className="pill danger">{t("riskPill")}</span></>}
+                </div>
               </div>
             );
           })}

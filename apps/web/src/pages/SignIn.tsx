@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../api.ts";
 import { useI18n } from "../i18n.tsx";
 import { TopBar } from "../components/TopBar.tsx";
-import { HelpButton, HelpDialog } from "../components/chat.tsx";
+import { PublicHelp } from "../components/chat.tsx";
 
 export function StaffLogin({ onDone }: { onDone: () => Promise<void> }) {
   const { t, errText } = useI18n();
@@ -77,7 +77,6 @@ export function PatientLogin({ onDone }: { onDone: () => Promise<void> }) {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [help, setHelp] = useState<{ emergencyNumber: string; crisisLineNumber: string } | null>(null);
 
   return (
     <>
@@ -97,11 +96,10 @@ export function PatientLogin({ onDone }: { onDone: () => Promise<void> }) {
             <button className="btn primary block" disabled={busy}>{t("signIn")}</button>
             <p className="muted small">{t("forgotPatient")}</p>
           </form>
-          <HelpButton onClick={() => api<{ emergencyNumber: string; crisisLineNumber: string }>("GET", "/api/public/help").then(setHelp, () => setHelp({ emergencyNumber: "", crisisLineNumber: "" }))} />
+          <PublicHelp />
           <Link className="small muted" to="/staff">{t("staffLink")}</Link>
         </div>
       </div>
-      {help && <HelpDialog help={help} onClose={() => setHelp(null)} />}
     </>
   );
 }

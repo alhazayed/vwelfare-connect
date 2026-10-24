@@ -146,6 +146,7 @@ img{max-width:100%}
 .help-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--line)}
 .help-list li > div{display:flex;flex-direction:column;min-width:0}
 .help-num{font-size:20px;font-weight:500;user-select:all}
+.help-none{margin:0;padding:12px;border-radius:10px;background:var(--surface);border:1px solid var(--line);font-size:16px}
 .call{min-height:44px;padding-inline:18px}
 
 .past{padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;min-height:0}
