@@ -30,6 +30,11 @@ export type EmrRecord = {
 
 export class EmrUnavailable extends Error {}
 
+/** The admin switched the EMR connection off. Nothing is sent or read; finished chats wait on the platform. */
+export class EmrTurnedOff extends EmrUnavailable {
+  constructor() { super("The EMR connection is turned off"); }
+}
+
 /**
  * The EMR answered but refused the record (a 4xx other than sign-in or rate-limit problems). Sending the same
  * record again won't help until someone looks at it. Only the status and the EMR's short error code are kept:
@@ -49,8 +54,11 @@ export type EmrCredentials = { baseUrl: string; clientId: string; clientSecret: 
 export class EmrClient {
   private token: { value: string; expiresAt: number; forCredentials: string } | null = null;
 
-  /** Credentials are read on every call, so changes saved in the admin's secrets list apply at once. */
-  constructor(private credentials: () => Promise<EmrCredentials>) {}
+  /**
+   * Credentials are read on every call, so changes saved in the admin's secrets list apply at once.
+   * `isEnabled` is the admin's on/off switch, checked before every call except "Test connection".
+   */
+  constructor(private credentials: () => Promise<EmrCredentials>, private isEnabled: () => Promise<boolean> = async () => true) {}
 
   private async getToken(c: EmrCredentials): Promise<string> {
     const key = `${c.baseUrl}\n${c.clientId}\n${c.clientSecret}`;
@@ -86,6 +94,7 @@ export class EmrClient {
   }
 
   private async fetch(path: string, init: RequestInit = {}): Promise<Response> {
+    if (!(await this.isEnabled())) throw new EmrTurnedOff();
     const c = await this.credentials();
     const headers = new Headers(init.headers);
     headers.set("authorization", `Bearer ${await this.getToken(c)}`);

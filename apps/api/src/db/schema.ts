@@ -142,6 +142,21 @@ export const secrets = pgTable("secrets", {
   valueEnc: text("value_enc").notNull(),
   description: text("description"),
   isSecret: boolean("is_secret").notNull().default(true),
+  // The service a custom secret belongs to ("custom" services only); null for the built-in settings and loose secrets.
+  serviceId: text("service_id"),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => staff.id)
+});
+
+// The services the app connects to, as the admin manages them: the built-in ones (emr, sms, email, scanner) have a row
+// only once switched off or on; services the admin adds have a name and an optional address (encrypted).
+export const integrations = pgTable("integrations", {
+  id: text("id").primaryKey(),
+  builtIn: boolean("built_in").notNull(),
+  name: text("name"),
+  description: text("description"),
+  addressEnc: text("address_enc"),
+  enabled: boolean("enabled").notNull().default(true),
   updatedAt: ts("updated_at").notNull().defaultNow(),
   updatedBy: uuid("updated_by").references(() => staff.id)
 });

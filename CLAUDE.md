@@ -27,7 +27,7 @@ npm workspaces, TypeScript everywhere, ES modules with explicit `.ts`/`.tsx` imp
 - `apps/api` — Fastify 5, Drizzle ORM over PostgreSQL (PGlite in `data/pg` when `DATABASE_URL` is empty), zod for input.
   - `src/emr/client.ts` — the **only** code that talks to the EMR (R1–R5). Credentials are read on every call from the secrets store.
   - `src/services/chat.ts` — chat lifecycle: open → locked → saved to the EMR → deleted. Also `workerTick` (reminders, auto-finish, retries).
-  - `src/services/secrets.ts`, `src/routes/secrets.ts` — the super admin's API secrets list behind a separate vault password.
+  - `src/services/secrets.ts`, `src/routes/secrets.ts` — the super admin's "APIs and services" tab (secrets, per-service on/off switch, connection tests, admin-added services) behind a separate vault password.
   - `src/auth.ts` — cookie sessions, idle timeouts, the `x-vwelfare` header check, `requireStaff` / `requirePatient`.
   - `src/routes/*` — one file per area (auth, admin, provider, patient, secrets). `src/db/schema.ts` is everything the platform stores.
   - `test/` — end-to-end tests through `app.inject`; `helpers.ts` builds an app with a fake clock (`env.clock.now`).
