@@ -42,7 +42,7 @@ export async function setup() {
     db, config, files, notifier, cipher, secrets,
     scanner: noScan,
     emr: emrFromSecrets(secrets, config),
-    hub: new Hub(),
+    hub: new Hub(db),
     now: () => clock.now
   };
   const app = await buildApp(deps);

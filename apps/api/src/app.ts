@@ -70,6 +70,13 @@ export async function buildApp(deps: Deps, opts: { logger?: boolean } = {}) {
     deps.hub.add(a.kind === "staff" ? staffKey(a.staff.id) : patientKey(a.patient.fileNumber), socket);
   });
 
+  // The fallback for screens whose WebSocket can't connect: a counter that changes whenever the socket would have said so.
+  app.get("/api/live", async (req, reply) => {
+    const a = req.auth;
+    if (!a || (a.kind === "staff" && !a.mfaOk)) return reply.code(401).send({ code: "not_signed_in", message: "Sign in again" });
+    return { v: await deps.hub.version(a.kind === "staff" ? staffKey(a.staff.id) : patientKey(a.patient.fileNumber)) };
+  });
+
   // Vercel Cron calls this once a minute in place of the timer in server.ts. Only registered when CRON_SECRET is set.
   const cronSecret = deps.config.CRON_SECRET;
   if (cronSecret) {

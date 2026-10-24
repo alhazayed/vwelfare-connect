@@ -165,3 +165,14 @@ export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull()
 });
+
+/**
+ * A change counter per signed-in person ("staff:<id>" or "patient:<file>"), raised whenever something they see
+ * changes. Screens poll it when the live WebSocket can't connect (on Vercel, functions keep no sockets and each
+ * instance has its own memory). Holds IDs and counters only.
+ */
+export const liveVersions = pgTable("live_versions", {
+  key: text("key").primaryKey(),
+  version: integer("version").notNull().default(0),
+  updatedAt: ts("updated_at").notNull().defaultNow()
+});

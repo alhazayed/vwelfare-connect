@@ -43,6 +43,13 @@
       "when": 1792834055623,
       "tag": "0005_service_switches",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792857212465,
+      "tag": "0006_live_versions",
+      "breakpoints": true
     }
   ]
 }
