@@ -457,4 +457,91 @@ export function adminRoutes(app: FastifyInstance, deps: Deps) {
       ? out.filter(r => [r.actorName, r.actorNameAr, r.actorId, r.action, r.target, r.targetName, r.targetNameAr].some(v => v && String(v).toLowerCase().includes(q))).slice(0, limit)
       : out;
   });
+
+  // ---- reports: counts only, from the account tables and the audit log ----
+
+  async function report(query: { from?: string; to?: string }) {
+    const tz = deps.config.CENTER_TIMEZONE;
+    const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().catch(undefined);
+    // Default: the last 30 days, today included, in the center's time zone.
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(deps.now());
+    const to = day.parse(query.to) ?? today;
+    const from = day.parse(query.from) ?? new Date(Date.parse(to + "T00:00:00Z") - 29 * 86_400_000).toISOString().slice(0, 10);
+    const inRange = sql`${auditLog.at} >= (${from}::date)::timestamp at time zone ${tz} and ${auditLog.at} < ((${to}::date) + 1)::timestamp at time zone ${tz}`;
+    const count = (where: ReturnType<typeof sql>) => sql<number>`count(*) filter (where ${where})::int`;
+
+    const [totals] = await deps.db.select({
+      invitationsSent: count(sql`${auditLog.action} in ('patient_created_and_invited', 'invite_resent', 'invite_resent_new_mobile') and (${auditLog.actorType} = 'provider' or ${auditLog.target} ~ '^[0-9]+$')`),
+      accountsCreated: count(sql`${auditLog.action} = 'account_created' and ${auditLog.actorType} = 'patient'`),
+      chatsStartedByPatients: count(sql`${auditLog.action} = 'chat_started' and ${auditLog.actorType} = 'patient'`),
+      chatsStartedByProviders: count(sql`${auditLog.action} = 'chat_started' and ${auditLog.actorType} = 'provider'`),
+      chatsSaved: count(sql`${auditLog.action} = 'chat_saved_to_emr'`),
+      finishedAutomatically: count(sql`${auditLog.action} = 'chat_finished' and ${auditLog.details}->>'finishedBy' = 'auto'`),
+      afterHoursChats: count(sql`${auditLog.action} = 'chat_saved_to_emr' and (${auditLog.details}->>'afterHours')::boolean`),
+      riskFlags: count(sql`${auditLog.action} = 'risk_words_flagged'`),
+      emrDelays: count(sql`${auditLog.action} = 'chat_sync_queued'`),
+      emrRefusals: count(sql`${auditLog.action} = 'chat_sync_rejected'`),
+      firstReplyMedianMinutes: sql<number | null>`(percentile_cont(0.5) within group (order by (${auditLog.details}->>'firstReplyMinutes')::numeric) filter (where ${auditLog.action} = 'chat_saved_to_emr' and ${auditLog.details}->>'firstReplyMinutes' is not null))::int`,
+      firstReplyP90Minutes: sql<number | null>`(percentile_cont(0.9) within group (order by (${auditLog.details}->>'firstReplyMinutes')::numeric) filter (where ${auditLog.action} = 'chat_saved_to_emr' and ${auditLog.details}->>'firstReplyMinutes' is not null))::int`
+    }).from(auditLog).where(inRange);
+
+    const weeks = await deps.db.select({
+      week: sql<string>`to_char(date_trunc('week', ${auditLog.at} at time zone ${tz}), 'YYYY-MM-DD')`,
+      started: count(sql`${auditLog.action} = 'chat_started'`),
+      saved: count(sql`${auditLog.action} = 'chat_saved_to_emr'`)
+    }).from(auditLog).where(and(inRange, sql`${auditLog.action} in ('chat_started', 'chat_saved_to_emr')`))
+      .groupBy(sql`1`).orderBy(sql`1`);
+
+    const patientStates = await deps.db.select({ status: patients.status, n: sql<number>`count(*)::int` }).from(patients).groupBy(patients.status);
+
+    const staffId = sql.raw(`"staff"."id"`);
+    const providers = await deps.db.select({
+      id: staff.id, nameEn: staff.nameEn, nameAr: staff.nameAr, active: staff.active,
+      patients: sql<number>`(select count(*)::int from ${providerPatients} where ${providerPatients.providerId} = ${staffId} and ${providerPatients.status} = 'accepted')`,
+      openChats: sql<number>`(select count(*)::int from ${chatSessions} where ${chatSessions.providerId} = ${staffId} and ${chatSessions.status} = 'open')`,
+      chatsSaved: sql<number>`(select count(*)::int from ${auditLog} where ${inRange} and ${auditLog.action} = 'chat_saved_to_emr' and ${auditLog.details}->>'providerId' = ${staffId}::text)`,
+      firstReplyMedianMinutes: sql<number | null>`(select percentile_cont(0.5) within group (order by (${auditLog.details}->>'firstReplyMinutes')::numeric)::int from ${auditLog} where ${inRange} and ${auditLog.action} = 'chat_saved_to_emr' and ${auditLog.details}->>'providerId' = ${staffId}::text and ${auditLog.details}->>'firstReplyMinutes' is not null)`
+    }).from(staff).where(eq(staff.role, "provider")).orderBy(staff.nameEn);
+
+    return {
+      from, to, timeZone: tz,
+      totals: totals!,
+      patients: Object.fromEntries(["invited", "active", "deactivated"].map(st => [st, patientStates.find(r => r.status === st)?.n ?? 0])) as Record<"invited" | "active" | "deactivated", number>,
+      weeks, providers
+    };
+  }
+
+  app.get<{ Querystring: { from?: string; to?: string } }>("/api/admin/reports", async req => {
+    requireStaff(req, "admin");
+    return report(req.query);
+  });
+
+  // The same numbers as a spreadsheet. Staff names and counts only; the download itself is recorded.
+  app.get<{ Querystring: { from?: string; to?: string } }>("/api/admin/reports.csv", async (req, reply) => {
+    const admin = requireStaff(req, "admin");
+    const r = await report(req.query);
+    const cell = (v: unknown) => {
+      const t = v === null || v === undefined ? "" : String(v);
+      // Quote everything, and keep a leading = + - @ from being read as a spreadsheet formula.
+      return `"${(/^[=+\-@]/.test(t) ? "'" + t : t).replace(/"/g, '""')}"`;
+    };
+    const rows: unknown[][] = [
+      ["Vwelfare Connect report", `${r.from} to ${r.to}`, r.timeZone],
+      [],
+      ["Measure", "Value"],
+      ...Object.entries(r.totals).map(([k, v]) => [k, v]),
+      ...Object.entries(r.patients).map(([k, v]) => [`patients_${k}`, v]),
+      [],
+      ["Week starting", "Chats started", "Chats saved to the EMR"],
+      ...r.weeks.map(w => [w.week, w.started, w.saved]),
+      [],
+      ["Provider", "Name (Arabic)", "Active", "Patients", "Open chats now", "Chats saved", "Median minutes to first reply"],
+      ...r.providers.map(p => [p.nameEn, p.nameAr, p.active ? "yes" : "no", p.patients, p.openChats, p.chatsSaved, p.firstReplyMedianMinutes])
+    ];
+    await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "report_exported", null, { from: r.from, to: r.to });
+    reply.header("content-type", "text/csv; charset=utf-8")
+      .header("content-disposition", `attachment; filename="vwelfare-report-${r.from}-to-${r.to}.csv"`);
+    // A byte-order mark so Excel reads the Arabic names correctly.
+    return "\ufeff" + rows.map(row => row.map(cell).join(",")).join("\r\n") + "\r\n";
+  });
 }
