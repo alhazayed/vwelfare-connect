@@ -36,6 +36,13 @@
       "when": 1792691188139,
       "tag": "0004_care_team_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792834055623,
+      "tag": "0005_service_switches",
+      "breakpoints": true
     }
   ]
 }

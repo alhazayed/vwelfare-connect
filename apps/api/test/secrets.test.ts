@@ -85,14 +85,14 @@ describe("secrets list", () => {
     await env.createStaff("provider", "sara@vwelfare.test", { emrStaffId: "ST-0193" });
     const sara = await env.staffClient("sara@vwelfare.test");
     await a.ok("POST", "/api/admin/vault/setup", { password: VAULT_PW });
-    expect(await a.ok("POST", "/api/admin/secrets/test/emr")).toEqual({ ok: true });
+    expect(await a.ok("POST", "/api/admin/services/emr/test")).toMatchObject({ ok: true });
 
     await a.ok("PUT", "/api/admin/secrets/EMR_CLIENT_SECRET", { value: "wrong-secret" });
-    expect((await a.ok("POST", "/api/admin/secrets/test/emr")).ok).toBe(false);
+    expect((await a.ok("POST", "/api/admin/services/emr/test")).ok).toBe(false);
     expect((await sara.req("POST", "/api/provider/lookup", { fileNumber: "10633" })).statusCode).toBe(503);
 
     await a.ok("DELETE", "/api/admin/secrets/EMR_CLIENT_SECRET");
-    expect(await a.ok("POST", "/api/admin/secrets/test/emr")).toEqual({ ok: true });
+    expect(await a.ok("POST", "/api/admin/services/emr/test")).toMatchObject({ ok: true });
     expect((await sara.req("POST", "/api/provider/lookup", { fileNumber: "10633" })).statusCode).toBe(200);
   });
 
@@ -118,7 +118,7 @@ describe("secrets list", () => {
     // A value that got into the table some other way is still never used.
     await env.deps.db.update(secrets).set({ valueEnc: env.deps.cipher.encrypt("https://collector.example") });
     await env.deps.secrets.set("EMR_CLIENT_ID", "test-client", { by: (await env.deps.db.query.staff.findFirst())!.id, now: env.clock.now });
-    expect((await a.ok("POST", "/api/admin/secrets/test/emr")).ok).toBe(false);
+    expect((await a.ok("POST", "/api/admin/services/emr/test")).ok).toBe(false);
     expect((await sara.req("POST", "/api/provider/lookup", { fileNumber: "10633" })).statusCode).toBe(503);
   });
 

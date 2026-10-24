@@ -55,9 +55,9 @@ Key files:
 | After-hours automatic reply | Working hours in Chat rules; checked in `addMessage` |
 | Past chats are read-only | Streamed from the EMR, never cached (`cache-control: no-store`); no download, copy or print, watermark, blur when the window loses focus |
 
-## API secrets (super admin)
+## APIs and services (super admin)
 
-The super admin's **API secrets** tab lists the addresses and keys of the services the app connects to: the EMR, SMS, email and virus scanning, plus any others you add.
+The super admin's **APIs and services** tab shows one card per service the app connects to: the EMR, SMS, email and virus scanning, plus any services you add. Each card has the service's addresses and keys, an on/off switch and **Test connection**.
 
 - **Second password.** The tab is locked behind a secrets password, separate from the sign-in password, set by the first super admin who opens it. It stays open for 10 minutes and locks after 5 wrong attempts (for 15 minutes).
 - **Saved values win.** A value saved here is used instead of the `.env` file, straight away and without a restart. Clearing it goes back to `.env`.
@@ -66,7 +66,11 @@ The super admin's **API secrets** tab lists the addresses and keys of the servic
 - **Forgotten password.** It can't be recovered from the app. On the server, stop the app and run `npm run vault:reset -- --confirm`; saved secrets are kept, and the next super admin sets a new password.
 - **Not in this list on purpose:** `FIELD_ENCRYPTION_KEY` and `DATABASE_URL`. The app needs them before it can read the list, so they stay in the server's environment.
 
-Only the EMR settings are used today. SMS, email and virus-scanning settings can be saved now and are marked "Not connected yet" until those integrations are built.
+- **Switching the EMR off** stops every call to the EMR at once (on every server instance): patient lookups and past chats show "paused by an administrator", and finished chats stay locked on the platform, not counted as failed attempts. When it's switched back on, the background worker sends each waiting chat once. Every admin gets an email both times.
+- **Test connection.** The EMR test signs in with the saved credentials. For SMS, virus scanning and added services it only checks that something answers at the saved address (no key is sent); for email it waits for the mail server's greeting. Addresses inside the server's own network are never tested on the live system.
+- **Services you add** have a name, a description, an optional address for testing, and their own secrets. Deleting one deletes its secrets. The app's own four services can be switched off but not deleted.
+
+Only the EMR is used today. SMS, email and virus-scanning settings and switches can be saved now and are marked "Not connected yet" until those integrations are built; services you add are kept for later in the same way.
 
 ## Before real patients use it
 

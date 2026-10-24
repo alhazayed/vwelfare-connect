@@ -19,7 +19,7 @@ export function emrFromSecrets(secrets: SecretStore, config: Config) {
       clientId: (await secrets.get("EMR_CLIENT_ID")) ?? "",
       clientSecret: (await secrets.get("EMR_CLIENT_SECRET")) ?? ""
     };
-  });
+  }, () => secrets.isEnabled("emr"));
 }
 
 export async function createDeps(config: Config = loadConfig()): Promise<{ deps: Deps; close: () => Promise<void> }> {
