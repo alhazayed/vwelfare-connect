@@ -244,6 +244,13 @@ describe("chat lifecycle", () => {
     expect(view.messages.map((m: any) => m.kind)).toContain("afterhours");
     expect((await sara.ok("GET", "/api/provider/patients")).find((p: any) => p.fileNumber === "10633").risk).toBe(true);
     expect(env.notifier.sent.some(s => s.channel === "email" && s.to === "sara@vwelfare.test" && !s.text.includes("hurt"))).toBe(true);
+
+    // The flag goes to the EMR with the chat, so it is still visible once the platform has deleted its copy.
+    await sara.ok("POST", "/api/provider/patients/10633/chat/finish");
+    const saved = env.emr.records.find(r => r.fileNumber === "10633" && r.recordName === view.recordName)!;
+    expect(saved.risk).toBe(true);
+    expect(saved.messages.find(m => m.sender === "patient")!.risk).toBe(true);
+    expect((await sara.ok("GET", `/api/provider/records/${saved.recordId}`)).risk).toBe(true);
   });
 });
 

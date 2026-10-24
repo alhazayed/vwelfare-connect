@@ -13,7 +13,8 @@ export type EmrRecordSummary = {
   attachmentCount: number;
 };
 
-export type EmrMessage = { seq: number; sentAt: string; sender: "patient" | "provider" | "system"; text?: string; attachmentId?: string };
+/** `risk`: the message contained words that may signal risk of self-harm (lib/risk.ts). */
+export type EmrMessage = { seq: number; sentAt: string; sender: "patient" | "provider" | "system"; text?: string; attachmentId?: string; risk?: boolean };
 export type EmrAttachmentMeta = { id: string; fileName: string; mimeType: string; sizeBytes: number; sha256: string };
 
 export type EmrRecord = {
@@ -24,6 +25,8 @@ export type EmrRecord = {
   startedAt: string;
   endedAt: string;
   finishedBy: "provider" | "auto" | "deactivation";
+  /** The chat was flagged for risk words, so whoever reads the record later can see it. Older records may not have it. */
+  risk?: boolean;
   messages: EmrMessage[];
   attachments: EmrAttachmentMeta[];
 };
@@ -87,7 +90,7 @@ export class EmrClient {
 
   private async send(c: EmrCredentials, path: string, init: RequestInit): Promise<Response> {
     try {
-      return await fetch(new URL(path, c.baseUrl), { ...init, signal: AbortSignal.timeout(15_000) });
+      return await fetch(new URL(path, c.baseUrl), { ...init, redirect: "error", signal: AbortSignal.timeout(15_000) });
     } catch (e) {
       throw new EmrUnavailable(`EMR not reachable: ${(e as Error).message}`);
     }
@@ -100,7 +103,8 @@ export class EmrClient {
     headers.set("authorization", `Bearer ${await this.getToken(c)}`);
     let res: Response;
     try {
-      res = await fetch(new URL(path, c.baseUrl), { ...init, headers, signal: AbortSignal.timeout(15_000) });
+      // Never follow a redirect: it could send the chat (or the credentials) to a host outside EMR_ALLOWED_HOSTS.
+      res = await fetch(new URL(path, c.baseUrl), { ...init, headers, redirect: "error", signal: AbortSignal.timeout(15_000) });
     } catch (e) {
       throw new EmrUnavailable(`EMR not reachable: ${(e as Error).message}`);
     }
