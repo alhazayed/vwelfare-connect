@@ -148,3 +148,53 @@ describe("admin provider account help", () => {
     expect((await anon.ok("POST", "/api/auth/staff/login", { email: "new@vwelfare.test", password: PASSWORD })).next).toBe("mfa-setup");
   });
 });
+
+describe("admin provider profiles", () => {
+  it("edits a provider's details and records only which fields changed", async () => {
+    const { admin } = await start();
+    const sara = (await admin.ok<any[]>("GET", "/api/admin/providers"))[0];
+    await admin.ok("PUT", `/api/admin/providers/${sara.id}`, { nameEn: "Dr. Sara A.", specialtyEn: "Psychiatrist", email: "sara.a@vwelfare.test", emrStaffId: "ST-0193" });
+    expect((await admin.ok<any[]>("GET", "/api/admin/providers"))[0]).toMatchObject({ nameEn: "Dr. Sara A.", email: "sara.a@vwelfare.test" });
+    expect(env.notifier.sent.at(-1)).toMatchObject({ channel: "email", to: "sara@vwelfare.test" }); // the old address hears about it
+    const log = await admin.ok<any[]>("GET", "/api/admin/audit?q=provider_changed");
+    expect(JSON.stringify(log)).not.toMatch(/sara\.a@/);
+    await env.createStaff("provider", "omar@vwelfare.test");
+    expect((await admin.req("PUT", `/api/admin/providers/${sara.id}`, { nameEn: "Dr. Sara A.", specialtyEn: "Psychiatrist", email: "omar@vwelfare.test", emrStaffId: "ST-0193" })).json().code).toBe("email_taken");
+  });
+
+  it("resets a provider's sign-in: old password and sessions stop working, a new set-up link works", async () => {
+    const { admin, sara } = await start();
+    const id = (await admin.ok<any[]>("GET", "/api/admin/providers"))[0].id;
+    await admin.ok("POST", `/api/admin/providers/${id}/reset-sign-in`, {});
+    expect((await sara.req("GET", "/api/provider/patients")).statusCode).toBe(401);
+    expect((await new Client(env.app).req("POST", "/api/auth/staff/login", { email: "sara@vwelfare.test", password: PASSWORD })).statusCode).toBe(401);
+    const token = inviteToken(env.notifier.sent.filter(s => s.to === "sara@vwelfare.test").at(-1)!.text);
+    const anon = new Client(env.app);
+    await anon.ok("POST", "/api/auth/staff/accept-invite", { token, password: "a-brand-new-password" });
+    expect((await anon.ok("POST", "/api/auth/staff/login", { email: "sara@vwelfare.test", password: "a-brand-new-password" })).next).toBe("mfa-setup");
+  });
+
+  it("hands a provider's patients to another provider, who joins only after each patient accepts", async () => {
+    const { admin, sara } = await start();
+    const patient = await onboard(sara, "10633", "mariam.s");
+    await sara.ok("POST", "/api/provider/patients", { fileNumber: "10482", mobile: "+000 0000 5678" });
+    const omarRow = await env.createStaff("provider", "omar@vwelfare.test", { emrStaffId: "ST-0200" });
+    const omar = await env.staffClient("omar@vwelfare.test");
+    const saraId = (await admin.ok<any[]>("GET", "/api/admin/providers")).find(p => p.email === "sara@vwelfare.test").id;
+
+    const r = await admin.ok("POST", `/api/admin/providers/${saraId}/handover`, { toProviderId: omarRow.id });
+    expect(r).toEqual({ requested: 2, already: 0, skipped: 0 });
+    expect((await omar.req("GET", "/api/provider/patients/10633")).statusCode).toBe(404); // not until the patient accepts
+    await patient.ok("POST", `/api/patient/team-requests/${omarRow.id}`, { answer: "accepted" });
+    expect((await omar.req("GET", "/api/provider/patients/10633")).statusCode).toBe(200);
+
+    // Running it again changes nothing for patients already linked or waiting.
+    expect(await admin.ok("POST", `/api/admin/providers/${saraId}/handover`, { toProviderId: omarRow.id })).toEqual({ requested: 0, already: 2, skipped: 0 });
+    expect((await admin.req("POST", `/api/admin/providers/${saraId}/handover`, { toProviderId: saraId })).json().code).toBe("bad_handover");
+
+    // The admin can cancel the request the never-registered patient can't answer yet.
+    await admin.ok("DELETE", `/api/admin/providers/${omarRow.id}/patients/10482`);
+    expect((await admin.ok<any[]>("GET", `/api/admin/providers/${omarRow.id}/patients`)).map(x => x.fileNumber)).toEqual(["10633"]);
+    expect((await admin.req("DELETE", `/api/admin/providers/${omarRow.id}/patients/10482`)).json().code).toBe("no_pending_request");
+  });
+});

@@ -8,6 +8,7 @@ import { requireStaff } from "../auth.ts";
 import { audit } from "../services/audit.ts";
 import { getRules, rulesSchema, saveRules } from "../services/rules.ts";
 import { finishSession, LEASE_MS } from "../services/chat.ts";
+import { patientKey, staffKey } from "../realtime.ts";
 
 const INVITE_HOURS = 72;
 const fileNumber = z.string().trim().regex(/^\d{3,12}$/);
@@ -101,6 +102,102 @@ export function adminRoutes(app: FastifyInstance, deps: Deps) {
       : [];
     if (!p) throw new HttpError(404, "not_found");
     await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "account_unlocked", p.id);
+    return { ok: true };
+  });
+
+  async function findProvider(id: string) {
+    const ok = z.string().uuid().safeParse(id);
+    const p = ok.success ? await deps.db.query.staff.findFirst({ where: and(eq(staff.id, ok.data), eq(staff.role, "provider")) }) : undefined;
+    if (!p) throw new HttpError(404, "not_found");
+    return p;
+  }
+
+  app.put<{ Params: { id: string } }>("/api/admin/providers/:id", async req => {
+    const admin = requireStaff(req, "admin");
+    const p = await findProvider(req.params.id);
+    const body = z.object({
+      nameEn: z.string().trim().min(2).max(120),
+      nameAr: z.string().trim().max(120).optional(),
+      specialtyEn: z.string().trim().min(2).max(120),
+      specialtyAr: z.string().trim().max(120).optional(),
+      email: z.string().trim().toLowerCase().email(),
+      emrStaffId: z.string().trim().min(1).max(60)
+    }).parse(req.body);
+    if (body.email !== p.email && await deps.db.query.staff.findFirst({ where: eq(staff.email, body.email) })) {
+      throw new HttpError(409, "email_taken", "A provider with this email already exists");
+    }
+    await deps.db.update(staff).set({ ...body, nameAr: body.nameAr || null, specialtyAr: body.specialtyAr || null }).where(eq(staff.id, p.id));
+    // Field names only: the audit log never holds the values.
+    const changed = (Object.keys(body) as Array<keyof typeof body>).filter(k => (body[k] || null) !== (p[k] || null));
+    await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "provider_changed", p.id, { fields: changed });
+    if (changed.includes("email")) {
+      await deps.notifier.email(p.email, "Your Vwelfare Connect sign-in email was changed",
+        "The email you use to sign in to Vwelfare Connect was changed by the center's admin. If you didn't expect this, contact the center.");
+    }
+    return { ok: true };
+  });
+
+  // Lost phone or forgotten password: the old password and authenticator stop working and a new set-up link goes out.
+  app.post<{ Params: { id: string } }>("/api/admin/providers/:id/reset-sign-in", async req => {
+    const admin = requireStaff(req, "admin");
+    const p = await findProvider(req.params.id);
+    if (!p.active) throw new HttpError(409, "account_deactivated", "Reactivate this account first");
+    await deps.db.update(staff).set({ passwordHash: null, mfaSecretEnc: null, mfaEnabled: false, mfaLastStep: null, failedLogins: 0, lockedUntil: null })
+      .where(eq(staff.id, p.id));
+    await deps.db.delete(authSessions).where(and(eq(authSessions.kind, "staff"), eq(authSessions.subjectId, p.id)));
+    const token = await replaceInvitation("staff", p.id);
+    await deps.notifier.email(p.email, "Set up your Vwelfare Connect sign-in again",
+      `Your sign-in was reset by the center's admin. Set a new password and sign-in app here (link valid for ${INVITE_HOURS} hours): ${deps.config.APP_BASE_URL}/invite/staff#${token}`);
+    await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "provider_sign_in_reset", p.id);
+    return { ok: true };
+  });
+
+  // The provider's linked and waiting patients, by file number.
+  app.get<{ Params: { id: string } }>("/api/admin/providers/:id/patients", async req => {
+    requireStaff(req, "admin");
+    const p = await findProvider(req.params.id);
+    return deps.db.select({ fileNumber: providerPatients.fileNumber, link: providerPatients.status, since: providerPatients.createdAt, status: patients.status })
+      .from(providerPatients).innerJoin(patients, eq(patients.fileNumber, providerPatients.fileNumber))
+      .where(eq(providerPatients.providerId, p.id)).orderBy(providerPatients.fileNumber);
+  });
+
+  // When a provider leaves, each of their patients is asked to accept the new provider: the care-team rule still applies.
+  app.post<{ Params: { id: string } }>("/api/admin/providers/:id/handover", async req => {
+    const admin = requireStaff(req, "admin");
+    const from = await findProvider(req.params.id);
+    const { toProviderId } = z.object({ toProviderId: z.string().uuid() }).parse(req.body);
+    const to = await findProvider(toProviderId);
+    if (to.id === from.id || !to.active) throw new HttpError(400, "bad_handover", "Choose another active provider");
+    const theirs = await deps.db.select({ fileNumber: patients.fileNumber, status: patients.status, mobileEnc: patients.mobileEnc })
+      .from(providerPatients).innerJoin(patients, eq(patients.fileNumber, providerPatients.fileNumber))
+      .where(and(eq(providerPatients.providerId, from.id), eq(providerPatients.status, "accepted")));
+    const now = deps.now();
+    let requested = 0, already = 0, skipped = 0;
+    for (const pt of theirs) {
+      if (pt.status === "deactivated") { skipped++; continue; }
+      const link = await deps.db.query.providerPatients.findFirst({ where: and(eq(providerPatients.providerId, to.id), eq(providerPatients.fileNumber, pt.fileNumber)) });
+      if (link?.status === "accepted" || link?.status === "pending") { already++; continue; }
+      await deps.db.insert(providerPatients).values({ providerId: to.id, fileNumber: pt.fileNumber, status: "pending", createdAt: now })
+        .onConflictDoUpdate({ target: [providerPatients.providerId, providerPatients.fileNumber], set: { status: "pending", createdAt: now, decidedAt: null } });
+      // A patient who hasn't signed up yet sees the request once they have; the invitation SMS is enough for now.
+      if (pt.status === "active" && pt.mobileEnc) await deps.notifier.sms(deps.cipher.decrypt(pt.mobileEnc), "Vwelfare: you have a new request in Vwelfare Connect. Sign in to see it.");
+      deps.hub.publish([patientKey(pt.fileNumber), staffKey(to.id)], { type: "team", fileNumber: pt.fileNumber });
+      requested++;
+    }
+    await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "care_team_handover", from.id, { to: to.id, requested, already, skipped });
+    return { requested, already, skipped };
+  });
+
+  // A care-team request the patient never answered.
+  app.delete<{ Params: { id: string; file: string } }>("/api/admin/providers/:id/patients/:file", async req => {
+    const admin = requireStaff(req, "admin");
+    const p = await findProvider(req.params.id);
+    const gone = await deps.db.delete(providerPatients)
+      .where(and(eq(providerPatients.providerId, p.id), eq(providerPatients.fileNumber, req.params.file), eq(providerPatients.status, "pending")))
+      .returning({ file: providerPatients.fileNumber });
+    if (!gone.length) throw new HttpError(409, "no_pending_request", "There is no waiting request to cancel");
+    await audit(deps, { type: "admin", id: admin.id, ip: req.ip }, "care_team_request_cancelled", req.params.file, { provider: p.id });
+    deps.hub.publish([patientKey(req.params.file), staffKey(p.id)], { type: "team", fileNumber: req.params.file });
     return { ok: true };
   });
 
