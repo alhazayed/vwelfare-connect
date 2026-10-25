@@ -50,6 +50,7 @@ Key files:
 | Chats finish automatically | `workerTick`: reminder after 20 hours, finish after 24 hours without messages (editable in Chat rules) |
 | Providers see other providers' chats only with consent | `checkRecordAccess` in `routes/provider.ts` |
 | Staff use MFA; 5 wrong passwords or codes lock an account for 15 minutes; each code works once | `routes/auth.ts` |
+| New passwords have at least 12 characters and aren't known leaked passwords (Have I Been Pwned; only the first 5 characters of the SHA-1 hash are sent, with padding). If the service doesn't answer within 3 seconds, the password is accepted on length alone | `lib/passwords.ts` |
 | Message text, mobile numbers, MFA secrets and files are encrypted | `lib/crypto.ts` (AES-256-GCM) |
 | Risk words flag the chat and show patients emergency numbers | `lib/risk.ts` (English and Arabic; the clinical lead should review the list) |
 | After-hours automatic reply | Working hours in Chat rules; checked in `addMessage` |
@@ -82,7 +83,7 @@ These are deliberately not finished. Each needs a decision or a service from Vwe
 - [ ] **Encryption keys.** Move `FIELD_ENCRYPTION_KEY` into the cloud's key-management service.
 - [ ] **File storage.** Replace the encrypted-disk store with private, encrypted cloud object storage.
 - [ ] **Hosting.** PostgreSQL (`DATABASE_URL`) and the app in the same cloud region as the EMR, with HTTPS (`COOKIE_SECURE=true`). Set `TRUST_PROXY` to the load balancer's addresses (not needed on Vercel), or sign-in limits and the audit log see the proxy instead of the person. Build the web app with `npm run build`; serve it and proxy `/api` (including WebSockets) to the API.
-- [ ] **Emergency numbers and working hours.** Set `EMERGENCY_NUMBER` (the national emergency number; production won't start without it, and patients see it whenever the admin hasn't saved one). Set the crisis line and working hours as super admin under Chat rules. The default working days (Sunday–Thursday, 08:00–16:00) are an assumption.
+- [ ] **Emergency numbers and working hours.** `EMERGENCY_NUMBER` defaults to 911 (Jordan) and `CENTER_TIMEZONE` to Asia/Amman; patients see the emergency number whenever the admin hasn't saved one. Set the crisis line and working hours as super admin under Chat rules. The default working days (Sunday–Thursday, 08:00–16:00) are an assumption.
 - [ ] **Password reset.** Patients currently contact the center; add a reset-by-SMS-code flow once SMS is connected.
 - [ ] **Security review.** Independent penetration test. (`otplib` 13, `drizzle-orm` 0.45, `zod` 4 and `vitest` 5 are in; `npm audit` was clean on 24 October 2026.)
 - [ ] **Clinical review.** Crisis wording, risk-word list, response-time promise, consent text.

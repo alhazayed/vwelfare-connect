@@ -5,6 +5,7 @@ import type { FileStore, Scanner } from "./lib/files.ts";
 import type { EmrClient } from "./emr/client.ts";
 import type { Notifier } from "./lib/notify.ts";
 import type { Hub } from "./realtime.ts";
+import type { BreachCheck } from "./lib/passwords.ts";
 import type { SecretStore } from "./services/secrets.ts";
 
 export type Deps = {
@@ -17,6 +18,7 @@ export type Deps = {
   emr: EmrClient;
   notifier: Notifier;
   hub: Hub;
+  breachCheck: BreachCheck;
   now: () => Date;
 };
 

@@ -14,9 +14,10 @@ describe("Vercel configuration", () => {
     expect(() => loadConfig({ ...base, VERCEL_ENV: "production", EMR_BASE_URL: "http://emr.example" })).toThrow(/https/);
   });
 
-  it("refuses to start in production without the national emergency number", () => {
+  it("always has a national emergency number and the center's time zone (Jordan unless set)", () => {
     const prod = { ...base, VERCEL_ENV: "production", EMR_BASE_URL: "https://emr.example" };
-    expect(() => loadConfig(prod)).toThrow(/EMERGENCY_NUMBER/);
+    expect(loadConfig(prod).EMERGENCY_NUMBER).toBe("911");
+    expect(loadConfig({ ...prod, CENTER_TIMEZONE: "" }).CENTER_TIMEZONE).toBe("Asia/Amman");
     expect(() => loadConfig({ ...prod, EMERGENCY_NUMBER: "call me" })).toThrow(/EMERGENCY_NUMBER/);
     expect(loadConfig({ ...prod, EMERGENCY_NUMBER: "999" }).EMERGENCY_NUMBER).toBe("999");
   });

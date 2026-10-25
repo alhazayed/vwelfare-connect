@@ -34,7 +34,7 @@ export function StaffInvite() {
         {info && (
           <form className="stack" onSubmit={async e => {
             e.preventDefault();
-            if (pw.length < 8 || pw !== pw2) { setErr(t("errPwMatch")); return; }
+            if (pw.length < 12 || pw !== pw2) { setErr(t("errPwMatch")); return; }
             try { await api("POST", "/api/auth/staff/accept-invite", { token, password: pw }); toast(t("pwSet")); navigate("/staff"); }
             catch (x) { setErr(errText(x)); }
           }}>
@@ -73,7 +73,7 @@ export function PatientInvite({ onDone }: { onDone: () => Promise<void> }) {
         {info && (
           <form className="stack" noValidate onSubmit={async e => {
             e.preventDefault();
-            if (f.pw.length < 8 || f.pw !== f.pw2) { setErr(t("errPwMatch")); return; }
+            if (f.pw.length < 12 || f.pw !== f.pw2) { setErr(t("errPwMatch")); return; }
             if (!f.terms) { setErr(t("errConsent")); return; }
             setBusy(true); setErr("");
             try {

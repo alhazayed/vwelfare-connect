@@ -9,10 +9,11 @@ import { HttpError, type Deps } from "../deps.ts";
 import { endSession, startSession } from "../auth.ts";
 import { audit } from "../services/audit.ts";
 import { getRules } from "../services/rules.ts";
+import { MIN_PASSWORD, refuseBreached } from "../lib/passwords.ts";
 
 const MAX_FAILURES = 5;
 const LOCK_MINUTES = 15;
-const password = z.string().min(8).max(200);
+const password = z.string().min(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters`).max(200);
 
 export function authRoutes(app: FastifyInstance, deps: Deps) {
   const limited = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
@@ -129,6 +130,7 @@ export function authRoutes(app: FastifyInstance, deps: Deps) {
   app.post("/api/auth/staff/accept-invite", limited, async req => {
     const body = z.object({ token: z.string(), password }).parse(req.body);
     const inv = await findInvitation(body.token, "staff");
+    await refuseBreached(deps.breachCheck, body.password, req.log);
     await deps.db.update(staff).set({ passwordHash: await hashPassword(body.password) }).where(eq(staff.id, inv.subject));
     await deps.db.update(invitations).set({ usedAt: deps.now() }).where(eq(invitations.id, inv.id));
     await audit(deps, { type: "provider", id: inv.subject, ip: req.ip }, "account_created");
@@ -151,6 +153,7 @@ export function authRoutes(app: FastifyInstance, deps: Deps) {
       acceptTerms: z.literal(true)
     }).parse(req.body);
     const inv = await findInvitation(body.token, "patient");
+    await refuseBreached(deps.breachCheck, body.password, req.log);
     const taken = await deps.db.query.patients.findFirst({ where: eq(patients.username, body.username) });
     if (taken) throw new HttpError(409, "username_taken", "That username is taken. Choose another.");
     const now = deps.now();

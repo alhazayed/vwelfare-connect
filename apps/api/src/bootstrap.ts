@@ -6,6 +6,7 @@ import { EncryptedDiskStore, noScan } from "./lib/files.ts";
 import { EmrClient, EmrUnavailable } from "./emr/client.ts";
 import { ConsoleNotifier } from "./lib/notify.ts";
 import { Hub } from "./realtime.ts";
+import { hibpCheck } from "./lib/passwords.ts";
 import { emrUrlProblem, SecretStore } from "./services/secrets.ts";
 import type { Deps } from "./deps.ts";
 
@@ -37,6 +38,7 @@ export async function createDeps(config: Config = loadConfig()): Promise<{ deps:
     // Full text only on a developer's own machine; masked on Vercel and in production.
     notifier: new ConsoleNotifier(console.log, !config.VERCEL && !config.production && process.env.NODE_ENV !== "production"),
     hub: new Hub(db),
+    breachCheck: hibpCheck(),
     now: () => new Date()
   };
   return { deps, close };

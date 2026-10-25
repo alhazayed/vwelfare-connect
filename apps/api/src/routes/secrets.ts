@@ -10,6 +10,7 @@ import { requireStaff } from "../auth.ts";
 import { audit } from "../services/audit.ts";
 import { getVault, saveVault, serviceAddressProblem } from "../services/secrets.ts";
 import { probeHttp, probeSmtp, type ProbeResult } from "../lib/probe.ts";
+import { refuseBreached } from "../lib/passwords.ts";
 
 const UNLOCK_MINUTES = 10;
 const MAX_FAILURES = 5;
@@ -64,6 +65,7 @@ export function secretsRoutes(app: FastifyInstance, deps: Deps) {
     const admin = requireStaff(req, "admin");
     if (await getVault(deps.db)) throw new HttpError(409, "vault_exists", "The secrets password is already set");
     const { password } = z.object({ password: vaultPassword }).parse(req.body);
+    await refuseBreached(deps.breachCheck, password, req.log);
     if (await verifyPassword(password, admin.passwordHash)) throw new HttpError(400, "same_as_sign_in", "Use a different password from your sign-in password");
     await saveVault(deps.db, { hash: await hashPassword(password), failed: 0, lockedUntil: null });
     await audit(deps, actor(admin.id, req.ip), "vault_password_set");
@@ -99,6 +101,7 @@ export function secretsRoutes(app: FastifyInstance, deps: Deps) {
     const body = z.object({ current: z.string(), next: vaultPassword }).parse(req.body);
     const v = await getVault(deps.db);
     if (!v || !(await verifyPassword(body.current, v.hash))) throw new HttpError(401, "bad_vault_password", "The current secrets password is incorrect");
+    await refuseBreached(deps.breachCheck, body.next, req.log);
     if (await verifyPassword(body.next, admin.passwordHash)) throw new HttpError(400, "same_as_sign_in", "Use a different password from your sign-in password");
     await saveVault(deps.db, { hash: await hashPassword(body.next), failed: 0, lockedUntil: null });
     await audit(deps, actor(admin.id, req.ip), "vault_password_changed");
