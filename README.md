@@ -78,7 +78,8 @@ Only the EMR is used today. SMS, email and virus-scanning settings and switches 
 These are deliberately not finished. Each needs a decision or a service from Vwelfare.
 
 - [ ] **Connect the real EMR.** Point `EMR_BASE_URL`, `EMR_CLIENT_ID` and `EMR_CLIENT_SECRET` at the vendor's sandbox and adjust `emr/client.ts` to their actual API.
-- [ ] **SMS and email.** `lib/notify.ts` only prints to the console (in full on a developer's machine; on Vercel and in production with masked addresses and no working invitation links). Plug in a provider licensed in your country.
+- [ ] **Email (Resend).** Built: as super admin, open APIs and services → Email and save `RESEND_API_KEY` and `EMAIL_FROM` (an address on a domain verified in Resend), then press Test; a test email goes to your sign-in address. Until then, emails print to the console. A refused email is logged with a masked address and doesn't stop the action that sent it.
+- [ ] **SMS.** No provider chosen yet: `lib/notify.ts` prints SMS to the console (in full on a developer's machine; on Vercel and in production with masked numbers and no working invitation links). Patients' invitation links therefore don't reach them until an SMS provider is connected.
 - [ ] **Malware scanning.** `lib/files.ts` has a `Scanner` interface with a placeholder that accepts every file. Connect ClamAV or the cloud provider's scanner.
 - [ ] **Encryption keys.** Move `FIELD_ENCRYPTION_KEY` into the cloud's key-management service.
 - [ ] **File storage.** Replace the encrypted-disk store with private, encrypted cloud object storage.

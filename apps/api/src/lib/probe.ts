@@ -1,13 +1,12 @@
-// "Test connection" for services whose integration isn't built yet (SMS, email, virus scanning, services the admin adds).
+// "Test connection" for services whose integration isn't built yet (SMS, virus scanning, services the admin adds).
 // It only checks that something answers at the saved address: no key or password is sent, and nothing the server
-// answers is kept or shown, apart from the HTTP status or the SMTP greeting code.
+// answers is kept or shown, apart from the HTTP status. (Email is tested by sending a real test email: lib/notify.ts.)
 import { lookup } from "node:dns/promises";
-import { isIP, connect as tcpConnect, type Socket } from "node:net";
-import { connect as tlsConnect } from "node:tls";
+import { isIP } from "node:net";
 
 export type ProbeResult = {
   ok: boolean;
-  /** reachable | server_error | not_set | bad_address | blocked_address | unreachable | timeout | not_smtp */
+  /** reachable | server_error | not_set | bad_address | blocked_address | unreachable | timeout | email_sent | email_failed | email_not_set */
   result: string;
   status?: number;
 };
@@ -52,38 +51,4 @@ export async function probeHttp(address: string | undefined, production: boolean
   } catch (e) {
     return { ok: false, result: (e as Error).name === "TimeoutError" ? "timeout" : "unreachable" };
   }
-}
-
-/** Opens a connection to the mail server and waits for its "220" greeting, then says goodbye. Nothing is signed in to. */
-export async function probeSmtp(host: string | undefined, portText: string | undefined, production: boolean): Promise<ProbeResult> {
-  if (!host) return { ok: false, result: "not_set" };
-  const port = Number(portText || 587);
-  if (!/^[A-Za-z0-9.\-:[\]]+$/.test(host) || !Number.isInteger(port) || port < 1 || port > 65535) return { ok: false, result: "bad_address" };
-  const problem = await hostProblem(host, production);
-  if (problem) return problem;
-  return new Promise<ProbeResult>(resolve => {
-    let done = false;
-    let greeting = "";
-    const finish = (r: ProbeResult) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      try { socket.end("QUIT\r\n"); } catch { /* already closed */ }
-      socket.destroy();
-      resolve(r);
-    };
-    const opts = { host: host.replace(/^\[|\]$/g, ""), port, servername: isIP(host) ? undefined : host };
-    // Port 465 speaks TLS from the start; the others greet in plain text first.
-    const socket: Socket = port === 465 ? tlsConnect(opts) : tcpConnect(opts);
-    const timer = setTimeout(() => finish({ ok: false, result: "timeout" }), TIMEOUT_MS);
-    socket.setEncoding("utf8");
-    socket.on("data", (chunk: string) => {
-      greeting += chunk;
-      if (!greeting.includes("\n") && greeting.length < 512) return;
-      const status = Number(greeting.slice(0, 3));
-      finish(status === 220 ? { ok: true, result: "reachable", status } : { ok: false, result: "not_smtp" });
-    });
-    socket.on("error", () => finish({ ok: false, result: "unreachable" }));
-    socket.on("close", () => finish({ ok: false, result: "unreachable" }));
-  });
 }

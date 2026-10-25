@@ -63,5 +63,5 @@ These come from the center's decisions and are covered by tests. Don't weaken th
 - The development database (PGlite) allows one process at a time: run `npm run seed` with the app stopped.
 - On Windows, stopping `npm run dev` from a background shell can leave the three Node processes running; check ports 4000, 4100 and 5173 before restarting.
 - Sample sign-in details are in `data/dev-accounts.txt` (git-ignored). Don't print passwords or secrets into chat, commits or code.
-- SMS, email and virus scanning are placeholders (`lib/notify.ts` prints to the console; `noScan` accepts every file). Don't describe them as working.
+- SMS and virus scanning are placeholders (`ConsoleNotifier` prints SMS to the console; `noScan` accepts every file). Don't describe them as working. Email goes through Resend (`ResendNotifier`) once the super admin saves `RESEND_API_KEY` and `EMAIL_FROM`; until then it prints too.
 - `FIELD_ENCRYPTION_KEY` and `DATABASE_URL` must stay in the environment; the app needs them before it can read the secrets list.

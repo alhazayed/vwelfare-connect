@@ -1,8 +1,9 @@
-import { createServer } from "node:net";
+import { createServer } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { auditLog, chatSessions, messages, secrets } from "../src/db/schema.ts";
 import { workerTick } from "../src/services/chat.ts";
-import { blockedIp, probeSmtp } from "../src/lib/probe.ts";
+import { blockedIp, probeHttp } from "../src/lib/probe.ts";
+import { ConsoleNotifier, ResendNotifier } from "../src/lib/notify.ts";
 import { Client, inviteToken, PASSWORD, setup } from "./helpers.ts";
 
 type Env = Awaited<ReturnType<typeof setup>>;
@@ -121,18 +122,11 @@ describe("services", () => {
     expect(JSON.stringify(log)).not.toContain("ph-key");
   });
 
-  it("tests SMS, email and scanner addresses without sending their keys", async () => {
+  it("tests SMS and scanner addresses without sending their keys", async () => {
     const a = await admin();
     expect(await a.ok("POST", "/api/admin/services/sms/test")).toMatchObject({ ok: false, result: "not_set" });
-
-    const smtp = createServer(s => s.end("220 mail.test ESMTP ready\r\n"));
-    await new Promise<void>(r => smtp.listen(0, "127.0.0.1", () => r()));
-    const port = (smtp.address() as { port: number }).port;
-    try {
-      await a.ok("PUT", "/api/admin/secrets/SMTP_HOST", { value: "127.0.0.1" });
-      await a.ok("PUT", "/api/admin/secrets/SMTP_PORT", { value: String(port) });
-      expect(await a.ok("POST", "/api/admin/services/email/test")).toMatchObject({ ok: true, result: "reachable", status: 220 });
-    } finally { smtp.close(); }
+    // The test console notifier can't send email, so there's nothing to test yet.
+    expect(await a.ok("POST", "/api/admin/services/email/test")).toMatchObject({ ok: false, result: "email_not_set" });
 
     // Cloud metadata and link-local addresses are never reached; private networks only outside production.
     expect(blockedIp("169.254.169.254", false)).toBe(true);
@@ -140,6 +134,73 @@ describe("services", () => {
     expect(blockedIp("10.0.0.5", true)).toBe(true);
     expect(blockedIp("::ffff:127.0.0.1", true)).toBe(true);
     expect(blockedIp("8.8.8.8", true)).toBe(false);
-    expect(await probeSmtp("169.254.169.254", "25", false)).toMatchObject({ ok: false, result: "blocked_address" });
+    expect(await probeHttp("http://169.254.169.254/latest", false)).toMatchObject({ ok: false, result: "blocked_address" });
+  });
+});
+
+describe("email through Resend", () => {
+  type Sent = { auth?: string; body: { from: string; to: string[]; subject: string; text: string } };
+  async function fakeResend(status = 200) {
+    const sent: Sent[] = [];
+    const server = createServer((req, res) => {
+      let raw = "";
+      req.on("data", c => raw += c);
+      req.on("end", () => {
+        if (req.method === "POST" && req.url === "/emails") sent.push({ auth: req.headers.authorization, body: JSON.parse(raw) });
+        res.writeHead(status, { "content-type": "application/json" }).end(status === 200 ? '{"id":"e-1"}' : '{"message":"invalid"}');
+      });
+    });
+    await new Promise<void>(r => server.listen(0, "127.0.0.1", () => r()));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    return { sent, base, close: () => new Promise(r => server.close(r)) };
+  }
+  function useResend(base: string) {
+    const fallback = new ConsoleNotifier(() => {});
+    const logs: string[] = [];
+    env.deps.notifier = new ResendNotifier(fallback, async () => ({
+      enabled: await env.deps.secrets.isEnabled("email"),
+      apiKey: await env.deps.secrets.get("RESEND_API_KEY"),
+      from: await env.deps.secrets.get("EMAIL_FROM")
+    }), l => logs.push(l), base);
+    return { fallback, logs };
+  }
+
+  it("sends once the key and send-from address are saved; prints instead while it's off or not set up", async () => {
+    const r = await fakeResend();
+    try {
+      const a = await admin();
+      const { fallback } = useResend(r.base);
+      await env.deps.notifier.email("sara@vwelfare.test", "Subject", "Body");
+      expect(r.sent).toHaveLength(0);
+      expect(fallback.sent).toHaveLength(1);
+
+      await a.ok("PUT", "/api/admin/secrets/RESEND_API_KEY", { value: "re_test_key" });
+      await a.ok("PUT", "/api/admin/secrets/EMAIL_FROM", { value: "Vwelfare Connect <no-reply@vwelfare.example>" });
+      expect(await a.ok("POST", "/api/admin/services/email/test")).toMatchObject({ ok: true, result: "email_sent" });
+      expect(r.sent[0]).toMatchObject({ auth: "Bearer re_test_key", body: { to: ["admin@vwelfare.test"], from: "Vwelfare Connect <no-reply@vwelfare.example>" } });
+
+      await env.deps.notifier.email("sara@vwelfare.test", "Subject", "Body");
+      expect(r.sent.at(-1)!.body).toMatchObject({ to: ["sara@vwelfare.test"], subject: "Subject", text: "Body" });
+
+      await a.ok("POST", "/api/admin/services/email/enabled", { enabled: false });
+      const before = r.sent.length;
+      await env.deps.notifier.email("sara@vwelfare.test", "Subject", "Body");
+      expect(r.sent).toHaveLength(before);
+      expect(fallback.sent).toHaveLength(2);
+    } finally { await r.close(); }
+  });
+
+  it("logs a refused email without the address or key, and doesn't throw", async () => {
+    const r = await fakeResend(403);
+    try {
+      const a = await admin();
+      const { logs } = useResend(r.base);
+      await a.ok("PUT", "/api/admin/secrets/RESEND_API_KEY", { value: "re_bad_key" });
+      await a.ok("PUT", "/api/admin/secrets/EMAIL_FROM", { value: "no-reply@vwelfare.example" });
+      expect(await a.ok("POST", "/api/admin/services/email/test")).toMatchObject({ ok: false, result: "email_failed", status: 403 });
+      await env.deps.notifier.email("sara@vwelfare.test", "Subject", "Body");
+      expect(logs.join("\n")).toContain("s…@vwelfare.test");
+      expect(logs.join("\n")).not.toMatch(/sara@|re_bad_key/);
+    } finally { await r.close(); }
   });
 });

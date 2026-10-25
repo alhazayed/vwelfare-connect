@@ -26,10 +26,11 @@ const T = {
     setup: "Set password and open", unlock: "Open secrets", mismatch: "The passwords don't match.",
     openUntil: "Open until {t}", lockNow: "Lock now", changePw: "Change secrets password",
     current: "Current secrets password", next: "New secrets password", pwChanged: "Secrets password changed",
-    g_emr: "EMR connection", g_sms: "SMS provider", g_email: "Email (SMTP)", g_scanner: "Virus scanning", g_custom: "Other secrets",
+    g_emr: "EMR connection", g_sms: "SMS provider", g_email: "Email (Resend)", g_scanner: "Virus scanning", g_custom: "Other secrets",
     gd_emr: "Used now for patient names, visit dates and saving chats.",
     gd_sms: "Saved for later: invitations and alerts still print to the server log.",
-    gd_email: "Saved for later: emails still print to the server log.",
+    gd_email: "Used now for staff invitations, sign-in resets, risk alerts and reminders. Until the key and send-from address are saved, emails print to the server log with addresses masked.",
+    offEmailBody: "While it's off, no emails go out: staff invitations, sign-in resets, risk alerts and reminders only print to the server log, with addresses masked.",
     gd_scanner: "Saved for later: uploaded files aren't scanned yet.",
     gd_custom: "Keys you add for other services. Only visible here.",
     colName: "Setting", colValue: "Value", colSource: "Source",
@@ -43,7 +44,7 @@ const T = {
     test: "Test connection", testing: "Testing…",
     l_EMR_BASE_URL: "API address", l_EMR_CLIENT_ID: "Client ID", l_EMR_CLIENT_SECRET: "Client secret",
     l_SMS_API_URL: "API address", l_SMS_API_KEY: "API key", l_SMS_SENDER_ID: "Sender name",
-    l_SMTP_HOST: "Server", l_SMTP_PORT: "Port", l_SMTP_USERNAME: "Username", l_SMTP_PASSWORD: "Password", l_EMAIL_FROM: "Send from address",
+    l_RESEND_API_KEY: "Resend API key", l_EMAIL_FROM: "Send from address (on a domain verified in Resend)",
     l_MALWARE_SCANNER_URL: "Scanner address", l_MALWARE_SCANNER_API_KEY: "API key",
     err_vault_locked: "The secrets list locked. Enter the password again.", err_bad_vault_password: "The secrets password is incorrect.",
     err_same_as_sign_in: "Use a different password from your sign-in password.", err_bad_name: "Use capital letters, numbers and underscores, starting with a letter.",
@@ -77,7 +78,9 @@ const T = {
     probe_blocked_address: "This address points inside the server's own network, so it isn't tested.",
     probe_unreachable: "Nothing answered at this address.",
     probe_timeout: "The address didn't answer within 8 seconds.",
-    probe_not_smtp: "Something answered, but it isn't a mail server."
+    probe_email_sent: "A test email was sent to your sign-in address. Check your inbox.",
+    probe_email_failed: "Resend refused the email (code {status}). Check the API key, and that the send-from address uses a domain verified in Resend.",
+    probe_email_not_set: "Save the Resend API key and the send-from address first."
   },
   ar: {
     title: "الواجهات والخدمات", sub: "الخدمات الخارجية التي يتصل بها التطبيق. يمكن تشغيل كل خدمة أو إيقافها واختبارها وحفظ عناوينها ومفاتيحها هنا. القيم المحفوظة مشفّرة وتحل محل ملف ‎.env.",
@@ -88,10 +91,11 @@ const T = {
     setup: "تعيين كلمة المرور والفتح", unlock: "فتح الأسرار", mismatch: "كلمتا المرور غير متطابقتين.",
     openUntil: "مفتوحة حتى {t}", lockNow: "قفل الآن", changePw: "تغيير كلمة مرور الأسرار",
     current: "كلمة مرور الأسرار الحالية", next: "كلمة مرور الأسرار الجديدة", pwChanged: "تم تغيير كلمة مرور الأسرار",
-    g_emr: "الاتصال بالسجل الطبي", g_sms: "مزوّد الرسائل النصية", g_email: "البريد الإلكتروني (SMTP)", g_scanner: "فحص الفيروسات", g_custom: "أسرار أخرى",
+    g_emr: "الاتصال بالسجل الطبي", g_sms: "مزوّد الرسائل النصية", g_email: "البريد الإلكتروني (Resend)", g_scanner: "فحص الفيروسات", g_custom: "أسرار أخرى",
     gd_emr: "مستخدمة الآن لأسماء المرضى وتواريخ الزيارات وحفظ المحادثات.",
     gd_sms: "محفوظة لاحقاً: الدعوات والتنبيهات ما زالت تُطبع في سجل الخادم.",
-    gd_email: "محفوظة لاحقاً: الرسائل ما زالت تُطبع في سجل الخادم.",
+    gd_email: "مستخدمة الآن لدعوات الموظفين وإعادة ضبط الدخول وتنبيهات الخطر والتذكيرات. إلى أن يُحفظ المفتاح وعنوان المرسل، تُطبع الرسائل في سجل الخادم مع إخفاء العناوين.",
+    offEmailBody: "أثناء الإيقاف لا تُرسل أي رسائل بريد: دعوات الموظفين وإعادة ضبط الدخول وتنبيهات الخطر والتذكيرات تُطبع فقط في سجل الخادم مع إخفاء العناوين.",
     gd_scanner: "محفوظة لاحقاً: الملفات المرفوعة لا تُفحص بعد.",
     gd_custom: "مفاتيح تضيفها لخدمات أخرى. تظهر هنا فقط.",
     colName: "الإعداد", colValue: "القيمة", colSource: "المصدر",
@@ -105,7 +109,7 @@ const T = {
     test: "اختبار الاتصال", testing: "جارٍ الاختبار…",
     l_EMR_BASE_URL: "عنوان الواجهة", l_EMR_CLIENT_ID: "معرّف العميل", l_EMR_CLIENT_SECRET: "سر العميل",
     l_SMS_API_URL: "عنوان الواجهة", l_SMS_API_KEY: "مفتاح الواجهة", l_SMS_SENDER_ID: "اسم المرسل",
-    l_SMTP_HOST: "الخادم", l_SMTP_PORT: "المنفذ", l_SMTP_USERNAME: "اسم المستخدم", l_SMTP_PASSWORD: "كلمة المرور", l_EMAIL_FROM: "عنوان المرسل",
+    l_RESEND_API_KEY: "مفتاح Resend API", l_EMAIL_FROM: "عنوان المرسل (على نطاق موثّق في Resend)",
     l_MALWARE_SCANNER_URL: "عنوان الفاحص", l_MALWARE_SCANNER_API_KEY: "مفتاح الواجهة",
     err_vault_locked: "أُقفلت قائمة الأسرار. أدخل كلمة المرور مرة أخرى.", err_bad_vault_password: "كلمة مرور الأسرار غير صحيحة.",
     err_same_as_sign_in: "استخدم كلمة مرور مختلفة عن كلمة مرور الدخول.", err_bad_name: "استخدم أحرفاً إنجليزية كبيرة وأرقاماً وشرطات سفلية، تبدأ بحرف.",
@@ -139,7 +143,9 @@ const T = {
     probe_blocked_address: "هذا العنوان داخل شبكة الخادم نفسه، لذلك لا يُختبر.",
     probe_unreachable: "لم يستجب شيء على هذا العنوان.",
     probe_timeout: "لم يستجب العنوان خلال 8 ثوانٍ.",
-    probe_not_smtp: "استجاب شيء، لكنه ليس خادم بريد."
+    probe_email_sent: "أُرسلت رسالة تجريبية إلى بريد الدخول الخاص بك. تحقّق من صندوق الوارد.",
+    probe_email_failed: "رفض Resend الرسالة (الرمز {status}). تحقّق من مفتاح API، ومن أن عنوان المرسل على نطاق موثّق في Resend.",
+    probe_email_not_set: "احفظ مفتاح Resend API وعنوان المرسل أولاً."
   }
 };
 
@@ -370,7 +376,7 @@ function SecretsList({ until, onLocked }: { until: string; onLocked: () => void 
       )}
       {turningOff && (
         <Dialog title={tx("offQ", { name: serviceLabel(turningOff) })} onClose={() => setTurningOff(null)}>
-          <p>{tx(turningOff.id === "emr" ? "offEmrBody" : turningOff.builtIn ? "offPlannedBody" : "offAddedBody")}</p>
+          <p>{tx(turningOff.id === "emr" ? "offEmrBody" : turningOff.id === "email" ? "offEmailBody" : turningOff.builtIn ? "offPlannedBody" : "offAddedBody")}</p>
           <div className="actions">
             <button className="btn" onClick={() => setTurningOff(null)}>{t("cancel")}</button>
             <button className="btn danger" onClick={() => { const s = turningOff; setTurningOff(null); setEnabled(s, false); }}>{tx("turnOff")}</button>

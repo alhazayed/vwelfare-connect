@@ -9,7 +9,7 @@ import { HttpError, type Deps } from "../deps.ts";
 import { requireStaff } from "../auth.ts";
 import { audit } from "../services/audit.ts";
 import { getVault, saveVault, serviceAddressProblem } from "../services/secrets.ts";
-import { probeHttp, probeSmtp, type ProbeResult } from "../lib/probe.ts";
+import { probeHttp, type ProbeResult } from "../lib/probe.ts";
 import { refuseBreached } from "../lib/passwords.ts";
 
 const UNLOCK_MINUTES = 10;
@@ -238,7 +238,8 @@ export function secretsRoutes(app: FastifyInstance, deps: Deps) {
       }
       case "sms": result = await probeHttp(await deps.secrets.get("SMS_API_URL"), production); break;
       case "scanner": result = await probeHttp(await deps.secrets.get("MALWARE_SCANNER_URL"), production); break;
-      case "email": result = await probeSmtp(await deps.secrets.get("SMTP_HOST"), await deps.secrets.get("SMTP_PORT"), production); break;
+      // A real email to the admin's own sign-in address: the only way to know the key and send-from domain work.
+      case "email": result = deps.notifier.testEmail ? await deps.notifier.testEmail(admin.email) : { ok: false, result: "email_not_set" }; break;
       default: result = await probeHttp(svc.address ?? undefined, production);
     }
     await audit(deps, actor(admin.id, req.ip), svc.id === "emr" ? "emr_connection_tested" : "service_tested", svc.builtIn ? svc.id : svc.name, { ok: result.ok });

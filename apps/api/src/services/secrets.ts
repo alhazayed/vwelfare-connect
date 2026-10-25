@@ -11,7 +11,7 @@ import type { FieldCipher } from "../lib/crypto.ts";
 
 export type Group = "emr" | "sms" | "email" | "scanner" | "custom";
 
-/** The services the app knows about. Only the EMR is connected; the others are saved for when their integration is built. */
+/** The services the app knows about. The EMR and email (Resend) are connected; SMS and scanning are saved for when their integration is built. */
 export const BUILT_IN = ["emr", "sms", "email", "scanner"] as const;
 export type BuiltIn = typeof BUILT_IN[number];
 const isBuiltIn = (id: string): id is BuiltIn => (BUILT_IN as readonly string[]).includes(id);
@@ -26,11 +26,8 @@ export const CATALOG: Array<{ name: string; group: Group; isSecret: boolean; con
   { name: "SMS_API_URL", group: "sms", isSecret: false, connected: false, kind: "url" },
   { name: "SMS_API_KEY", group: "sms", isSecret: true, connected: false },
   { name: "SMS_SENDER_ID", group: "sms", isSecret: false, connected: false },
-  { name: "SMTP_HOST", group: "email", isSecret: false, connected: false },
-  { name: "SMTP_PORT", group: "email", isSecret: false, connected: false, kind: "port" },
-  { name: "SMTP_USERNAME", group: "email", isSecret: false, connected: false },
-  { name: "SMTP_PASSWORD", group: "email", isSecret: true, connected: false },
-  { name: "EMAIL_FROM", group: "email", isSecret: false, connected: false },
+  { name: "RESEND_API_KEY", group: "email", isSecret: true, connected: true },
+  { name: "EMAIL_FROM", group: "email", isSecret: false, connected: true },
   { name: "MALWARE_SCANNER_URL", group: "scanner", isSecret: false, connected: false, kind: "url" },
   { name: "MALWARE_SCANNER_API_KEY", group: "scanner", isSecret: true, connected: false }
 ];
@@ -170,7 +167,7 @@ export class SecretStore {
     return [
       ...BUILT_IN.map(id => {
         const r = rows.get(id);
-        return { id, builtIn: true, connected: id === "emr", name: null, description: null, address: null, enabled: r?.enabled ?? true, updatedAt: r?.updatedAt ?? null, updatedBy: r?.updatedBy ?? null };
+        return { id, builtIn: true, connected: id === "emr" || id === "email", name: null, description: null, address: null, enabled: r?.enabled ?? true, updatedAt: r?.updatedAt ?? null, updatedBy: r?.updatedBy ?? null };
       }),
       ...added.map(r => ({
         id: r.id, builtIn: false, connected: false, name: r.name, description: r.description,
