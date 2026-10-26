@@ -50,6 +50,7 @@ Key files:
 | Chats finish automatically | `workerTick`: reminder after 20 hours, finish after 24 hours without messages (editable in Chat rules) |
 | Providers see other providers' chats only with consent | `checkRecordAccess` in `routes/provider.ts` |
 | Staff use MFA; 5 wrong passwords or codes lock an account for 15 minutes; each code works once | `routes/auth.ts` |
+| New passwords have at least 12 characters and aren't known leaked passwords (Have I Been Pwned; only the first 5 characters of the SHA-1 hash are sent, with padding). If the service doesn't answer within 3 seconds, the password is accepted on length alone | `lib/passwords.ts` |
 | Message text, mobile numbers, MFA secrets and files are encrypted | `lib/crypto.ts` (AES-256-GCM) |
 | Risk words flag the chat and show patients emergency numbers | `lib/risk.ts` (English and Arabic; the clinical lead should review the list) |
 | After-hours automatic reply | Working hours in Chat rules; checked in `addMessage` |
@@ -77,12 +78,13 @@ Only the EMR is used today. SMS, email and virus-scanning settings and switches 
 These are deliberately not finished. Each needs a decision or a service from Vwelfare.
 
 - [ ] **Connect the real EMR.** Point `EMR_BASE_URL`, `EMR_CLIENT_ID` and `EMR_CLIENT_SECRET` at the vendor's sandbox and adjust `emr/client.ts` to their actual API.
-- [ ] **SMS and email.** `lib/notify.ts` only prints to the console (in full on a developer's machine; on Vercel and in production with masked addresses and no working invitation links). Plug in a provider licensed in your country.
+- [ ] **Email (Resend).** Built: as super admin, open APIs and services → Email and save `RESEND_API_KEY` and `EMAIL_FROM` (an address on a domain verified in Resend), then press Test; a test email goes to your sign-in address. Until then, emails print to the console. A refused email is logged with a masked address and doesn't stop the action that sent it.
+- [ ] **SMS.** No provider chosen yet: `lib/notify.ts` prints SMS to the console (in full on a developer's machine; on Vercel and in production with masked numbers and no working invitation links). Patients' invitation links therefore don't reach them until an SMS provider is connected.
 - [ ] **Malware scanning.** `lib/files.ts` has a `Scanner` interface with a placeholder that accepts every file. Connect ClamAV or the cloud provider's scanner.
 - [ ] **Encryption keys.** Move `FIELD_ENCRYPTION_KEY` into the cloud's key-management service.
 - [ ] **File storage.** Replace the encrypted-disk store with private, encrypted cloud object storage.
 - [ ] **Hosting.** PostgreSQL (`DATABASE_URL`) and the app in the same cloud region as the EMR, with HTTPS (`COOKIE_SECURE=true`). Set `TRUST_PROXY` to the load balancer's addresses (not needed on Vercel), or sign-in limits and the audit log see the proxy instead of the person. Build the web app with `npm run build`; serve it and proxy `/api` (including WebSockets) to the API.
-- [ ] **Emergency numbers and working hours.** Set `EMERGENCY_NUMBER` (the national emergency number; production won't start without it, and patients see it whenever the admin hasn't saved one). Set the crisis line and working hours as super admin under Chat rules. The default working days (Sunday–Thursday, 08:00–16:00) are an assumption.
+- [ ] **Emergency numbers and working hours.** `EMERGENCY_NUMBER` defaults to 911 (Jordan) and `CENTER_TIMEZONE` to Asia/Amman; patients see the emergency number whenever the admin hasn't saved one. Set the crisis line and working hours as super admin under Chat rules. The default working days (Sunday–Thursday, 08:00–16:00) are an assumption.
 - [ ] **Password reset.** Patients currently contact the center; add a reset-by-SMS-code flow once SMS is connected.
 - [ ] **Security review.** Independent penetration test. (`otplib` 13, `drizzle-orm` 0.45, `zod` 4 and `vitest` 5 are in; `npm audit` was clean on 24 October 2026.)
 - [ ] **Clinical review.** Crisis wording, risk-word list, response-time promise, consent text.
@@ -113,6 +115,25 @@ Not ready for real patients on Vercel yet:
 To try a preview deployment without a computer, set `PREVIEW_SEED_PASSWORD` (12 characters or more) in the project's environment variables for **Preview only**. On start-up, a preview deployment then adds the sample accounts (super admin `admin@vwelfare.example`, providers `s.almansour@vwelfare.example` and `o.khalil@vwelfare.example`, patient `layla.h`) with that password, unless the super admin already exists. Nothing about them is logged. Staff set up their authenticator by scanning the QR code at first sign-in. Production never adds them. Give Preview its own `DATABASE_URL`, or the sample accounts end up in the production database.
 
 Run all three services together locally with `vercel dev`.
+
+## Running on the center's servers (Klinikat)
+
+Real patient data runs on Klinikat's infrastructure, next to the EMR. Vercel is only for previews with sample accounts. `deploy/` holds the container build:
+
+- `deploy/Dockerfile`: two images, `api` (Node 22, runs as the `node` user, `APP_ENV=production`) and `web` (nginx with the built app, the same security headers as `vercel.json`, and `/api` plus the WebSocket passed to the API).
+- `deploy/compose.yaml`: PostgreSQL 17, the API and the web front end on a private network. The web container listens on port 8080; put the center's HTTPS load balancer in front of it.
+- `deploy/production.env.example`: the settings to fill in. Keep the real file and `FIELD_ENCRYPTION_KEY` in Klinikat's secret store, never in git.
+
+```bash
+cp deploy/production.env.example deploy/production.env   # fill in
+openssl rand -hex 24 > deploy/db_password.txt             # and use the same password in DATABASE_URL
+docker compose -f deploy/compose.yaml up -d --build
+```
+
+- **Production checks.** With `APP_ENV=production` the API refuses to start without `DATABASE_URL` or an https `EMR_BASE_URL`, never uses the mock EMR, and masks the console log.
+- **Files.** Attachments are stored encrypted in the `files` volume (`/data/files`) until their chat is saved to the EMR. Put that volume and the database on Klinikat's backed-up storage.
+- **Client addresses.** nginx replaces `X-Forwarded-For` with the address it sees, and the API trusts only the private network (`TRUST_PROXY`). If a load balancer sits in front, add its range to nginx with `set_real_ip_from` so sign-in limits and the audit log see the real address.
+- **One API instance.** Sign-in rate limits and live updates are held in memory, so run a single `api` container (scaling out needs a shared store first).
 
 ## Useful commands
 

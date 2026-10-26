@@ -4,3 +4,5 @@ data/
 .env
 *.log
 .DS_Store
+deploy/production.env
+deploy/db_password.txt

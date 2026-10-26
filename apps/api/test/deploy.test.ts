@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.ts";
@@ -14,9 +15,10 @@ describe("Vercel configuration", () => {
     expect(() => loadConfig({ ...base, VERCEL_ENV: "production", EMR_BASE_URL: "http://emr.example" })).toThrow(/https/);
   });
 
-  it("refuses to start in production without the national emergency number", () => {
-    const prod = { ...base, VERCEL_ENV: "production", EMR_BASE_URL: "https://emr.example" };
-    expect(() => loadConfig(prod)).toThrow(/EMERGENCY_NUMBER/);
+  it("always has a national emergency number and the center's time zone (Jordan unless set)", () => {
+    const prod = { ...base, VERCEL_ENV: "production", EMR_BASE_URL: "https://emr.example", DATABASE_URL: "postgres://db.example/vwelfare" };
+    expect(loadConfig(prod).EMERGENCY_NUMBER).toBe("911");
+    expect(loadConfig({ ...prod, CENTER_TIMEZONE: "" }).CENTER_TIMEZONE).toBe("Asia/Amman");
     expect(() => loadConfig({ ...prod, EMERGENCY_NUMBER: "call me" })).toThrow(/EMERGENCY_NUMBER/);
     expect(loadConfig({ ...prod, EMERGENCY_NUMBER: "999" }).EMERGENCY_NUMBER).toBe("999");
   });
@@ -62,5 +64,24 @@ describe("scheduled worker endpoint", () => {
 
   it("isn't there when no cron secret is set", async () => {
     expect((await env.app.inject({ method: "GET", url: "/api/internal/worker" })).statusCode).toBe(404);
+  });
+
+  it("runs as production on the center's own servers (APP_ENV), which need a real database and the real EMR", () => {
+    const own = { ...base, APP_ENV: "production", EMR_BASE_URL: "https://emr.klinikat.example" };
+    expect(() => loadConfig(own)).toThrow(/DATABASE_URL/);
+    expect(() => loadConfig({ ...own, EMR_BASE_URL: "", MOCK_EMR_URL: "http://mock.internal" })).toThrow(/EMR_BASE_URL/);
+    const c = loadConfig({ ...own, DATABASE_URL: "postgres://db.internal/vwelfare", API_HOST: "0.0.0.0" });
+    expect(c.production).toBe(true);
+    expect(c.API_HOST).toBe("0.0.0.0");
+    expect(loadConfig(base).API_HOST).toBe("127.0.0.1");
+  });
+});
+
+describe("container build", () => {
+  it("sends the same security headers as vercel.json", () => {
+    const root = new URL("../../../", import.meta.url);
+    const vercel = JSON.parse(readFileSync(new URL("vercel.json", root), "utf8")) as { headers: Array<{ headers: Array<{ key: string; value: string }> }> };
+    const nginx = readFileSync(new URL("deploy/nginx.conf", root), "utf8");
+    for (const h of vercel.headers.flatMap(x => x.headers)) expect(nginx).toContain(`add_header ${h.key} "${h.value}" always;`);
   });
 });

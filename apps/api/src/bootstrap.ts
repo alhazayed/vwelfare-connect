@@ -4,8 +4,9 @@ import { openDb } from "./db/client.ts";
 import { FieldCipher } from "./lib/crypto.ts";
 import { EncryptedDiskStore, noScan } from "./lib/files.ts";
 import { EmrClient, EmrUnavailable } from "./emr/client.ts";
-import { ConsoleNotifier } from "./lib/notify.ts";
+import { ConsoleNotifier, ResendNotifier } from "./lib/notify.ts";
 import { Hub } from "./realtime.ts";
+import { hibpCheck } from "./lib/passwords.ts";
 import { emrUrlProblem, SecretStore } from "./services/secrets.ts";
 import type { Deps } from "./deps.ts";
 
@@ -34,9 +35,14 @@ export async function createDeps(config: Config = loadConfig()): Promise<{ deps:
     files: new EncryptedDiskStore(join(config.dataDir, "files"), cipher),
     scanner: noScan,
     emr: emrFromSecrets(secrets, config),
-    // Full text only on a developer's own machine; masked on Vercel and in production.
-    notifier: new ConsoleNotifier(console.log, !config.VERCEL && !config.production && process.env.NODE_ENV !== "production"),
+    // Email through Resend once it's set up. The console fallback shows full text only on a developer's own machine;
+    // it's masked on Vercel and in production.
+    notifier: new ResendNotifier(
+      new ConsoleNotifier(console.log, !config.VERCEL && !config.production && process.env.NODE_ENV !== "production"),
+      async () => ({ enabled: await secrets.isEnabled("email"), apiKey: await secrets.get("RESEND_API_KEY"), from: await secrets.get("EMAIL_FROM") })
+    ),
     hub: new Hub(db),
+    breachCheck: hibpCheck(),
     now: () => new Date()
   };
   return { deps, close };

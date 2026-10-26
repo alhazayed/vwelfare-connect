@@ -15,6 +15,10 @@ import { SecretStore } from "../src/services/secrets.ts";
 import { Hub } from "../src/realtime.ts";
 import type { Deps } from "../src/deps.ts";
 
+/** Passwords the fake breach check reports as leaked; "unreachable" makes it act as if the service is down. */
+export const BREACHED = new Set(["password1234", "qwertyuiop123"]);
+export const breachCheck = { unreachable: false };
+
 export const PASSWORD = "correct-horse-battery";
 
 export async function setup() {
@@ -43,6 +47,7 @@ export async function setup() {
     scanner: noScan,
     emr: emrFromSecrets(secrets, config),
     hub: new Hub(db),
+    breachCheck: async pw => breachCheck.unreachable ? null : BREACHED.has(pw),
     now: () => clock.now
   };
   const app = await buildApp(deps);
