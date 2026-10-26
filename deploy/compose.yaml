@@ -1,0 +1,52 @@
+# Vwelfare Connect on the center's own servers: PostgreSQL, the API and the web front end.
+#   cp deploy/production.env.example deploy/production.env   # fill it in; never commit it
+#   docker compose -f deploy/compose.yaml up -d --build
+# Put the center's HTTPS load balancer (or a TLS-terminating proxy) in front of port 8080.
+name: vwelfare
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vwelfare
+      POSTGRES_USER: vwelfare
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vwelfare -d vwelfare"]
+      interval: 10s
+      retries: 6
+
+  api:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: api }
+    restart: unless-stopped
+    env_file: production.env
+    environment:
+      # Only the web container may set X-Forwarded-For.
+      TRUST_PROXY: 172.30.0.0/24
+    volumes: [files:/data]
+    networks: [internal]
+    depends_on: { db: { condition: service_healthy } }
+
+  web:
+    build: { context: .., dockerfile: deploy/Dockerfile, target: web }
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    networks: [internal]
+    depends_on: [api]
+
+networks:
+  internal:
+    ipam: { config: [{ subnet: 172.30.0.0/24 }] }
+
+volumes:
+  pgdata: {}
+  # Encrypted uploads (chat attachments until the chat is saved to the EMR). Back it up with the database.
+  files: {}
+
+secrets:
+  db_password:
+    file: ./db_password.txt

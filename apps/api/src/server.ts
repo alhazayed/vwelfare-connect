@@ -15,7 +15,7 @@ const app = await buildApp(deps, { logger: true });
 // loading, so awaiting it at the top level never resolves.
 app.listen(process.env.VERCEL
   ? { port: Number(process.env.PORT ?? 3000), host: "0.0.0.0" }
-  : { port: deps.config.API_PORT, host: "127.0.0.1" }
+  : { port: deps.config.API_PORT, host: deps.config.API_HOST }
 ).catch((e) => { app.log.error(e, "could not start listening"); process.exit(1); });
 app.log.info(`Center time zone: ${deps.config.CENTER_TIMEZONE}`);
 

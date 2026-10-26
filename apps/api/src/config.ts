@@ -25,6 +25,10 @@ const schema = z.object({
   CRON_SECRET: z.string().optional().transform(v => v || undefined),
   VERCEL: z.string().optional(),
   VERCEL_ENV: z.string().optional(),
+  // "production" on the center's own servers (the container build in deploy/). On Vercel, VERCEL_ENV says it instead.
+  APP_ENV: z.string().optional(),
+  // Address the API listens on outside Vercel. The container sets 0.0.0.0 so the web container can reach it.
+  API_HOST: z.string().default("127.0.0.1"),
   // Hosts the EMR address may point to, comma-separated (host or host:port). Empty = only the host of EMR_BASE_URL.
   // An EMR_BASE_URL saved in the admin's secrets list must match one of these, so it can't send chats elsewhere.
   EMR_ALLOWED_HOSTS: z.string().optional().transform(v => (v ?? "").split(",").map(h => h.trim().toLowerCase()).filter(Boolean)),
@@ -42,7 +46,7 @@ export type Config = Omit<z.infer<typeof schema>, "EMR_BASE_URL" | "TRUST_PROXY"
 
 export function loadConfig(overrides: Partial<Record<keyof z.input<typeof schema>, string>> = {}): Config {
   const parsed = schema.parse({ ...process.env, ...overrides });
-  const production = parsed.VERCEL_ENV === "production";
+  const production = parsed.VERCEL_ENV === "production" || parsed.APP_ENV === "production";
   if (parsed.VERCEL) {
     // Functions don't keep their disk, so the built-in PGlite database would be lost.
     if (!parsed.DATABASE_URL) throw new Error("DATABASE_URL must be set on Vercel: the built-in database needs a disk that functions don't keep.");
@@ -51,6 +55,8 @@ export function loadConfig(overrides: Partial<Record<keyof z.input<typeof schema
   if (production && !parsed.EMR_BASE_URL) throw new Error("EMR_BASE_URL must be set in production. The mock EMR is never used there.");
   const EMR_BASE_URL = parsed.EMR_BASE_URL ?? (production ? undefined : parsed.MOCK_EMR_URL) ?? "http://localhost:4100";
   if (production && new URL(EMR_BASE_URL).protocol !== "https:") throw new Error("EMR_BASE_URL must use https in production.");
+  // On the center's servers the database must be a real PostgreSQL with backups, not the built-in development one.
+  if (production && !parsed.DATABASE_URL) throw new Error("DATABASE_URL must be set in production: the built-in database is for development only.");
   const EMR_ALLOWED_HOSTS = parsed.EMR_ALLOWED_HOSTS.length ? parsed.EMR_ALLOWED_HOSTS : [new URL(EMR_BASE_URL).host.toLowerCase()];
   const TRUST_PROXY = parsed.TRUST_PROXY ?? (parsed.VERCEL ? true : ["127.0.0.1", "::1"]);
   return { ...parsed, EMR_BASE_URL, EMR_ALLOWED_HOSTS, TRUST_PROXY, production, dataDir: resolve(repoRoot, parsed.DATA_DIR) };

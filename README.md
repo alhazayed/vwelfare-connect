@@ -116,6 +116,25 @@ To try a preview deployment without a computer, set `PREVIEW_SEED_PASSWORD` (12 
 
 Run all three services together locally with `vercel dev`.
 
+## Running on the center's servers (Klinikat)
+
+Real patient data runs on Klinikat's infrastructure, next to the EMR. Vercel is only for previews with sample accounts. `deploy/` holds the container build:
+
+- `deploy/Dockerfile`: two images, `api` (Node 22, runs as the `node` user, `APP_ENV=production`) and `web` (nginx with the built app, the same security headers as `vercel.json`, and `/api` plus the WebSocket passed to the API).
+- `deploy/compose.yaml`: PostgreSQL 17, the API and the web front end on a private network. The web container listens on port 8080; put the center's HTTPS load balancer in front of it.
+- `deploy/production.env.example`: the settings to fill in. Keep the real file and `FIELD_ENCRYPTION_KEY` in Klinikat's secret store, never in git.
+
+```bash
+cp deploy/production.env.example deploy/production.env   # fill in
+openssl rand -hex 24 > deploy/db_password.txt             # and use the same password in DATABASE_URL
+docker compose -f deploy/compose.yaml up -d --build
+```
+
+- **Production checks.** With `APP_ENV=production` the API refuses to start without `DATABASE_URL` or an https `EMR_BASE_URL`, never uses the mock EMR, and masks the console log.
+- **Files.** Attachments are stored encrypted in the `files` volume (`/data/files`) until their chat is saved to the EMR. Put that volume and the database on Klinikat's backed-up storage.
+- **Client addresses.** nginx replaces `X-Forwarded-For` with the address it sees, and the API trusts only the private network (`TRUST_PROXY`). If a load balancer sits in front, add its range to nginx with `set_real_ip_from` so sign-in limits and the audit log see the real address.
+- **One API instance.** Sign-in rate limits and live updates are held in memory, so run a single `api` container (scaling out needs a shared store first).
+
 ## Useful commands
 
 | Command | What it does |
